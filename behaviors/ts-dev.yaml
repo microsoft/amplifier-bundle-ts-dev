@@ -3,14 +3,14 @@
 # Provides comprehensive TypeScript/JavaScript development capabilities:
 # - Code quality checking (ESLint, Prettier, tsc, stub detection)
 # - Automatic checking on file edits (hook)
-# - Expert TS/JS agent
+# - Expert agents: ts-dev, react-dev, nextjs-dev, node-dev
 #
 # Include this behavior to add TypeScript/JavaScript development tools to any bundle.
 
 bundle:
   name: ts-dev-behavior
   version: 0.1.0
-  description: TypeScript/JavaScript development tools - quality checks, auto-checking hook, and expert agent
+  description: TypeScript/JavaScript development tools - quality checks, auto-checking hook, and framework-specific agents
 
 # Tools provided by this behavior
 tools:
@@ -54,7 +54,12 @@ hooks:
 # Agents provided by this behavior
 agents:
   include:
+    # Base TypeScript/JavaScript expert
     - ts-dev:agents/ts-dev
+    # Framework-specific experts
+    - ts-dev:agents/react-dev
+    - ts-dev:agents/nextjs-dev
+    - ts-dev:agents/node-dev
 
 # Context files loaded with this behavior
 context:

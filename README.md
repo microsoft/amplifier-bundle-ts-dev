@@ -8,9 +8,17 @@ Comprehensive TypeScript/JavaScript development tools for [Amplifier](https://gi
 |-----------|-------------|
 | **Tool Module** | `ts_check` - agent-callable tool for quality checks |
 | **Hook Module** | Automatic checking on file write/edit events |
-| **Agent** | `ts-dev` - expert TypeScript/JavaScript developer agent |
 | **LSP Integration** | Includes lsp-typescript for code intelligence |
 | **Shared Library** | Core checking logic used by tool and hook modules |
+
+### Expert Agents
+
+| Agent | Expertise | Use For |
+|-------|-----------|---------|
+| **ts-dev** | General TypeScript/JavaScript | Code quality, type errors, imports |
+| **react-dev** | React & hooks | Component patterns, re-renders, state management |
+| **nextjs-dev** | Next.js App Router | SSR/SSG, hydration, caching, Server Components |
+| **node-dev** | Node.js backend | Async patterns, security, APIs, error handling |
 
 ## Quick Start
 
@@ -23,10 +31,9 @@ includes:
 ```
 
 This gives you:
-- Foundation tools and agents
 - TypeScript/JavaScript LSP (code intelligence)
 - TypeScript/JavaScript quality checks (tool + hook)
-- TypeScript/JavaScript development expert agent
+- All four expert agents (ts-dev, react-dev, nextjs-dev, node-dev)
 
 ## Checks Performed
 
@@ -36,6 +43,60 @@ This gives you:
 | **Format** | Prettier | Code formatting |
 | **Types** | tsc | TypeScript type errors |
 | **Stubs** | custom | TODOs, console.log, 'any' types, placeholders |
+
+## Agent Usage
+
+### General TypeScript/JavaScript (`ts-dev`)
+
+```
+> @ts-dev Check src/utils.ts for issues
+> @ts-dev Help me fix these type errors
+```
+
+### React Development (`react-dev`)
+
+```
+> @react-dev Why does this component keep re-rendering?
+> @react-dev Extract this logic into a custom hook
+> @react-dev Review this component for hooks best practices
+```
+
+**Specialties:**
+- Hooks patterns and rules
+- Re-render debugging
+- State management guidance
+- Component composition
+- Testing with React Testing Library
+
+### Next.js Development (`nextjs-dev`)
+
+```
+> @nextjs-dev I'm getting a hydration mismatch on this page
+> @nextjs-dev What caching strategy should I use for this API?
+> @nextjs-dev Help me migrate this pages/ route to app/ router
+```
+
+**Specialties:**
+- App Router file conventions
+- Server Components vs Client Components
+- Data fetching and caching strategies
+- Hydration error diagnosis
+- SSR/SSG/ISR guidance
+
+### Node.js Backend (`node-dev`)
+
+```
+> @node-dev Review this Express app for security issues
+> @node-dev Help me design proper error handling
+> @node-dev Why is this async function not working correctly?
+```
+
+**Specialties:**
+- Async patterns and event loop
+- Security (OWASP Top 10)
+- Error handling middleware
+- API design (REST)
+- Performance optimization
 
 ## Configuration
 
@@ -73,28 +134,6 @@ Hook configuration:
 }
 ```
 
-## Agent Usage
-
-The `ts-dev` agent is an expert TypeScript/JavaScript developer that wields both quality checks and LSP tools:
-
-```
-# Within Amplifier
-> @ts-dev Check src/auth.ts for issues
-
-# The agent will:
-# 1. Run ts_check on the file
-# 2. Use LSP to understand code structure
-# 3. Provide actionable recommendations
-```
-
-**Agent capabilities:**
-- Code quality analysis
-- Type error diagnosis
-- Import organization
-- Code structure understanding (via LSP)
-- React component analysis
-- Best practices guidance
-
 ## Hook Behavior
 
 When enabled, the hook automatically runs checks after TypeScript/JavaScript file edits:
@@ -113,20 +152,22 @@ This creates a tight feedback loop - issues are caught as you work, not at the e
 │                    amplifier-bundle-ts-dev                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌───────────────────┐          │
-│  │  Tool   │  │  Hook   │  │   CLI   │  │     ts-dev        │          │
-│  │ Module  │  │ Module  │  │(future) │  │      Agent        │          │
-│  └────┬────┘  └────┬────┘  └────┬────┘  └─────────┬─────────┘          │
-│       │            │            │                  │                    │
-│       └────────────┴─────┬──────┴──────────────────┘                    │
-│                          │                                              │
-│                   ┌──────┴──────┐                                       │
-│                   │ SHARED CORE │                                       │
-│                   │ checker.py  │                                       │
-│                   └─────────────┘                                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │   ts-dev    │  │  react-dev  │  │ nextjs-dev  │  │  node-dev   │    │
+│  │   Agent     │  │   Agent     │  │   Agent     │  │   Agent     │    │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘    │
+│         │                │                │                │           │
+│         └────────────────┴────────┬───────┴────────────────┘           │
+│                                   │                                     │
+│         ┌─────────────────────────┼─────────────────────────┐          │
+│         │                         │                         │          │
+│  ┌──────┴──────┐  ┌───────────────┴───────────────┐  ┌──────┴──────┐   │
+│  │ Tool Module │  │        SHARED CORE            │  │ Hook Module │   │
+│  │  ts_check   │  │ checker.py, config.py, models │  │ auto-check  │   │
+│  └─────────────┘  └───────────────────────────────┘  └─────────────┘   │
 │                                                                         │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  INCLUDES: lsp-typescript                                               │
+│  INCLUDES: lsp-typescript (code intelligence)                           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -146,6 +187,17 @@ npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
 npm install -g eslint prettier typescript
 ```
 
+## Context Files
+
+Each agent loads specialized knowledge:
+
+| File | Content |
+|------|---------|
+| `TS_BEST_PRACTICES.md` | TypeScript/JavaScript development philosophy |
+| `REACT_PATTERNS.md` | React hooks, components, state, performance |
+| `NEXTJS_PATTERNS.md` | App Router, Server Components, caching |
+| `NODEJS_PATTERNS.md` | Async, error handling, security, APIs |
+
 ## Development Philosophy
 
 This bundle embodies **type-safe pragmatism**:
@@ -153,18 +205,17 @@ This bundle embodies **type-safe pragmatism**:
 1. **Type safety as a feature** - Use TypeScript's type system to catch bugs early
 2. **Explicit over implicit** - Clear code beats clever code
 3. **Modern patterns first** - ES modules, async/await, optional chaining
-4. **React best practices** - Functional components, hooks, proper typing
+4. **Framework-aware** - Specialized guidance for React, Next.js, Node.js
 5. **Clean imports** - Organized, no circular dependencies
 
 See [TS_BEST_PRACTICES.md](context/TS_BEST_PRACTICES.md) for the full guide.
 
 ## Future Roadmap
 
-This bundle is the "TypeScript/JavaScript Development Home" - a collection point for TS/JS-specific capabilities:
-
 | Phase | Feature | Status |
 |-------|---------|--------|
 | MVP | ESLint, Prettier, tsc, stubs | ✅ Done |
+| Agents | Framework-specific experts | ✅ Done |
 | Testing | Jest/Vitest integration | 🔮 Planned |
 | Bundling | Webpack/Vite analysis | 🔮 Planned |
 | Dependencies | npm-audit, outdated checks | 🔮 Planned |
