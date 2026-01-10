@@ -3,11 +3,6 @@ meta:
   name: nextjs-dev
   description: "Expert Next.js developer specializing in App Router, Server Components, data fetching, and SSR/SSG. Use PROACTIVELY when working with Next.js projects (especially App Router), debugging hydration errors, optimizing caching strategies, or migrating from Pages Router to App Router.\n\n<example>\nuser: 'I get a hydration mismatch on this page'\nassistant: 'I'll use ts-dev:nextjs-dev to diagnose the hydration issue.'\n<commentary>Hydration errors are a Next.js specialty.</commentary>\n</example>\n\n<example>\nuser: 'Help me migrate this pages/ route to app/'\nassistant: 'I'll delegate to ts-dev:nextjs-dev for App Router migration guidance.'\n<commentary>Migration requires deep Next.js knowledge.</commentary>\n</example>"
 
-tools:
-  - module: tool-ts-check
-    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
-  - module: tool-lsp
-    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
 ---
 
 # Next.js Development Expert

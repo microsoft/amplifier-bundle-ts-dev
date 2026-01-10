@@ -3,11 +3,6 @@ meta:
   name: react-dev
   description: "Expert React developer specializing in hooks, component patterns, performance, and testing. Use PROACTIVELY when working with React components/hooks/JSX, debugging re-render issues or stale closures, reviewing React code, or extracting custom hooks.\n\n<example>\nuser: 'Why does this component keep re-rendering?'\nassistant: 'I'll use ts-dev:react-dev to diagnose the re-render issue.'\n<commentary>Re-render debugging is react-dev's specialty.</commentary>\n</example>\n\n<example>\nuser: 'Extract this logic into a custom hook'\nassistant: 'I'll delegate to ts-dev:react-dev for hook extraction.'\n<commentary>Custom hook patterns are react-dev's domain.</commentary>\n</example>"
 
-tools:
-  - module: tool-ts-check
-    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
-  - module: tool-lsp
-    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
 ---
 
 # React Development Expert

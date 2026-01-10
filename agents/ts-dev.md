@@ -3,11 +3,6 @@ meta:
   name: ts-dev
   description: "Expert TypeScript/JavaScript developer with integrated code quality and LSP tooling. Use PROACTIVELY when checking TypeScript/JavaScript code quality (linting, types, formatting), understanding code structure, debugging TypeScript-specific issues, or reviewing code for best practices.\n\n<example>\nuser: 'Check this module for code quality issues'\nassistant: 'I'll use ts-dev:ts-dev to run comprehensive quality checks.'\n<commentary>Code quality reviews are ts-dev's domain.</commentary>\n</example>\n\n<example>\nuser: 'Why is TypeScript complaining about this function?'\nassistant: 'I'll delegate to ts-dev:ts-dev to analyze the type issue.'\n<commentary>Type checking questions trigger ts-dev.</commentary>\n</example>"
 
-tools:
-  - module: tool-ts-check
-    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
-  - module: tool-lsp
-    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
 ---
 
 # TypeScript/JavaScript Development Expert
