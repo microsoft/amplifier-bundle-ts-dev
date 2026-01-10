@@ -3,6 +3,36 @@ meta:
   name: react-dev
   description: "Expert React developer specializing in hooks, component patterns, performance, and testing. Use PROACTIVELY when working with React components/hooks/JSX, debugging re-render issues or stale closures, reviewing React code, or extracting custom hooks.\n\n<example>\nuser: 'Why does this component keep re-rendering?'\nassistant: 'I'll use ts-dev:react-dev to diagnose the re-render issue.'\n<commentary>Re-render debugging is react-dev's specialty.</commentary>\n</example>\n\n<example>\nuser: 'Extract this logic into a custom hook'\nassistant: 'I'll delegate to ts-dev:react-dev for hook extraction.'\n<commentary>Custom hook patterns are react-dev's domain.</commentary>\n</example>"
 
+# Tools available to this agent when spawned as a sub-session
+tools:
+  # TypeScript/JavaScript code quality checking
+  - module: tool-ts-check
+    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
+  # File reading and editing
+  - module: tool-filesystem
+    source: git+https://github.com/microsoft/amplifier-module-tool-filesystem@main
+  # File search (glob, grep)
+  - module: tool-search
+    source: git+https://github.com/microsoft/amplifier-module-tool-search@main
+  # LSP code intelligence with TypeScript/JavaScript support
+  - module: tool-lsp
+    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
+    config:
+      languages:
+        typescript:
+          extensions: [".ts", ".tsx", ".mts", ".cts"]
+          workspace_markers: ["tsconfig.json", "package.json", ".git"]
+          server:
+            command: ["typescript-language-server", "--stdio"]
+            install_check: ["typescript-language-server", "--version"]
+            install_hint: "Install with: npm install -g typescript-language-server typescript"
+        javascript:
+          extensions: [".js", ".jsx", ".mjs", ".cjs"]
+          workspace_markers: ["jsconfig.json", "package.json", ".git"]
+          server:
+            command: ["typescript-language-server", "--stdio"]
+            install_check: ["typescript-language-server", "--version"]
+            install_hint: "Install with: npm install -g typescript-language-server typescript"
 ---
 
 # React Development Expert

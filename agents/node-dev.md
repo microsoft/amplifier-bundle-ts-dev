@@ -3,6 +3,36 @@ meta:
   name: node-dev
   description: "Expert Node.js backend developer specializing in async patterns, error handling, security, and APIs. Use PROACTIVELY when working with Node.js backend code (Express, Fastify, etc.), debugging async issues or memory leaks, reviewing code for security vulnerabilities, or designing REST APIs.\n\n<example>\nuser: 'Review this Express app for security issues'\nassistant: 'I'll use ts-dev:node-dev to audit for security vulnerabilities.'\n<commentary>Security review is node-dev's specialty.</commentary>\n</example>\n\n<example>\nuser: 'Why is this async function not working correctly?'\nassistant: 'I'll delegate to ts-dev:node-dev to diagnose the async issue.'\n<commentary>Async pattern debugging requires Node.js expertise.</commentary>\n</example>"
 
+# Tools available to this agent when spawned as a sub-session
+tools:
+  # TypeScript/JavaScript code quality checking
+  - module: tool-ts-check
+    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
+  # File reading and editing
+  - module: tool-filesystem
+    source: git+https://github.com/microsoft/amplifier-module-tool-filesystem@main
+  # File search (glob, grep)
+  - module: tool-search
+    source: git+https://github.com/microsoft/amplifier-module-tool-search@main
+  # LSP code intelligence with TypeScript/JavaScript support
+  - module: tool-lsp
+    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
+    config:
+      languages:
+        typescript:
+          extensions: [".ts", ".tsx", ".mts", ".cts"]
+          workspace_markers: ["tsconfig.json", "package.json", ".git"]
+          server:
+            command: ["typescript-language-server", "--stdio"]
+            install_check: ["typescript-language-server", "--version"]
+            install_hint: "Install with: npm install -g typescript-language-server typescript"
+        javascript:
+          extensions: [".js", ".jsx", ".mjs", ".cjs"]
+          workspace_markers: ["jsconfig.json", "package.json", ".git"]
+          server:
+            command: ["typescript-language-server", "--stdio"]
+            install_check: ["typescript-language-server", "--version"]
+            install_hint: "Install with: npm install -g typescript-language-server typescript"
 ---
 
 # Node.js Backend Development Expert

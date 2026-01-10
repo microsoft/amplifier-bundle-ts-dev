@@ -3,6 +3,36 @@ meta:
   name: nextjs-dev
   description: "Expert Next.js developer specializing in App Router, Server Components, data fetching, and SSR/SSG. Use PROACTIVELY when working with Next.js projects (especially App Router), debugging hydration errors, optimizing caching strategies, or migrating from Pages Router to App Router.\n\n<example>\nuser: 'I get a hydration mismatch on this page'\nassistant: 'I'll use ts-dev:nextjs-dev to diagnose the hydration issue.'\n<commentary>Hydration errors are a Next.js specialty.</commentary>\n</example>\n\n<example>\nuser: 'Help me migrate this pages/ route to app/'\nassistant: 'I'll delegate to ts-dev:nextjs-dev for App Router migration guidance.'\n<commentary>Migration requires deep Next.js knowledge.</commentary>\n</example>"
 
+# Tools available to this agent when spawned as a sub-session
+tools:
+  # TypeScript/JavaScript code quality checking
+  - module: tool-ts-check
+    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
+  # File reading and editing
+  - module: tool-filesystem
+    source: git+https://github.com/microsoft/amplifier-module-tool-filesystem@main
+  # File search (glob, grep)
+  - module: tool-search
+    source: git+https://github.com/microsoft/amplifier-module-tool-search@main
+  # LSP code intelligence with TypeScript/JavaScript support
+  - module: tool-lsp
+    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
+    config:
+      languages:
+        typescript:
+          extensions: [".ts", ".tsx", ".mts", ".cts"]
+          workspace_markers: ["tsconfig.json", "package.json", ".git"]
+          server:
+            command: ["typescript-language-server", "--stdio"]
+            install_check: ["typescript-language-server", "--version"]
+            install_hint: "Install with: npm install -g typescript-language-server typescript"
+        javascript:
+          extensions: [".js", ".jsx", ".mjs", ".cjs"]
+          workspace_markers: ["jsconfig.json", "package.json", ".git"]
+          server:
+            command: ["typescript-language-server", "--stdio"]
+            install_check: ["typescript-language-server", "--version"]
+            install_hint: "Install with: npm install -g typescript-language-server typescript"
 ---
 
 # Next.js Development Expert
