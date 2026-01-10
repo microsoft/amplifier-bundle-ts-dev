@@ -52,14 +52,16 @@ hooks:
         - tsc
 
 # Agents provided by this behavior
+# Note: descriptions must be defined here - the bundle loader doesn't parse agent markdown meta sections
 agents:
-  include:
-    # Base TypeScript/JavaScript expert
-    - ts-dev:agents/ts-dev
-    # Framework-specific experts
-    - ts-dev:agents/react-dev
-    - ts-dev:agents/nextjs-dev
-    - ts-dev:agents/node-dev
+  ts-dev:agents/ts-dev:
+    description: "Expert TypeScript/JavaScript developer with integrated code quality and LSP tooling. Use PROACTIVELY when checking code quality (linting, types, formatting), understanding code structure, debugging TypeScript-specific issues, or reviewing code for best practices."
+  ts-dev:agents/react-dev:
+    description: "Expert React developer specializing in hooks, component patterns, performance, and testing. Use PROACTIVELY when working with React components/hooks/JSX, debugging re-render issues or stale closures, reviewing React code, or extracting custom hooks."
+  ts-dev:agents/nextjs-dev:
+    description: "Expert Next.js developer specializing in App Router, Server Components, data fetching, and SSR/SSG. Use PROACTIVELY when working with Next.js projects, debugging hydration errors, optimizing caching strategies, or migrating from Pages Router to App Router."
+  ts-dev:agents/node-dev:
+    description: "Expert Node.js backend developer specializing in async patterns, error handling, security, and APIs. Use PROACTIVELY when working with Node.js backend code (Express, Fastify), debugging async issues or memory leaks, reviewing code for security vulnerabilities, or designing REST APIs."
 
 # Context files loaded with this behavior
 context:
