@@ -1,33 +1,7 @@
 ---
 meta:
   name: react-dev
-  description: |
-    Expert React developer specializing in hooks, component patterns, performance, and testing.
-    Use PROACTIVELY when:
-    - Working with React components, hooks, or JSX
-    - Debugging re-render issues or stale closures
-    - Reviewing React code for best practices
-    - Extracting custom hooks or refactoring components
-    
-    Examples:
-    
-    <example>
-    user: 'Why does this component keep re-rendering?'
-    assistant: 'I'll use ts-dev:react-dev to diagnose the re-render issue.'
-    <commentary>Re-render debugging is react-dev's specialty.</commentary>
-    </example>
-    
-    <example>
-    user: 'Extract this logic into a custom hook'
-    assistant: 'I'll delegate to ts-dev:react-dev for hook extraction.'
-    <commentary>Custom hook patterns are react-dev's domain.</commentary>
-    </example>
-    
-    <example>
-    user: 'Review this React component for issues'
-    assistant: 'I'll use ts-dev:react-dev to review for React-specific patterns and anti-patterns.'
-    <commentary>React code review benefits from specialized knowledge.</commentary>
-    </example>
+  description: "Expert React developer specializing in hooks, component patterns, performance, and testing. Use PROACTIVELY when working with React components/hooks/JSX, debugging re-render issues or stale closures, reviewing React code, or extracting custom hooks.\n\n<example>\nuser: 'Why does this component keep re-rendering?'\nassistant: 'I'll use ts-dev:react-dev to diagnose the re-render issue.'\n<commentary>Re-render debugging is react-dev's specialty.</commentary>\n</example>\n\n<example>\nuser: 'Extract this logic into a custom hook'\nassistant: 'I'll delegate to ts-dev:react-dev for hook extraction.'\n<commentary>Custom hook patterns are react-dev's domain.</commentary>\n</example>"
 
 tools:
   - module: tool-ts-check

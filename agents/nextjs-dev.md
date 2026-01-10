@@ -1,33 +1,7 @@
 ---
 meta:
   name: nextjs-dev
-  description: |
-    Expert Next.js developer specializing in App Router, Server Components, data fetching, and SSR/SSG.
-    Use PROACTIVELY when:
-    - Working with Next.js projects (especially App Router)
-    - Debugging hydration errors or server/client issues
-    - Optimizing data fetching and caching strategies
-    - Migrating from Pages Router to App Router
-    
-    Examples:
-    
-    <example>
-    user: 'I get a hydration mismatch on this page'
-    assistant: 'I'll use ts-dev:nextjs-dev to diagnose the hydration issue.'
-    <commentary>Hydration errors are a Next.js specialty.</commentary>
-    </example>
-    
-    <example>
-    user: 'Help me migrate this pages/ route to app/'
-    assistant: 'I'll delegate to ts-dev:nextjs-dev for App Router migration guidance.'
-    <commentary>Migration requires deep Next.js knowledge.</commentary>
-    </example>
-    
-    <example>
-    user: 'What caching strategy should I use for this API?'
-    assistant: 'I'll use ts-dev:nextjs-dev to recommend the right caching approach.'
-    <commentary>Next.js caching is complex and framework-specific.</commentary>
-    </example>
+  description: "Expert Next.js developer specializing in App Router, Server Components, data fetching, and SSR/SSG. Use PROACTIVELY when working with Next.js projects (especially App Router), debugging hydration errors, optimizing caching strategies, or migrating from Pages Router to App Router.\n\n<example>\nuser: 'I get a hydration mismatch on this page'\nassistant: 'I'll use ts-dev:nextjs-dev to diagnose the hydration issue.'\n<commentary>Hydration errors are a Next.js specialty.</commentary>\n</example>\n\n<example>\nuser: 'Help me migrate this pages/ route to app/'\nassistant: 'I'll delegate to ts-dev:nextjs-dev for App Router migration guidance.'\n<commentary>Migration requires deep Next.js knowledge.</commentary>\n</example>"
 
 tools:
   - module: tool-ts-check

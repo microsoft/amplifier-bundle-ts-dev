@@ -1,33 +1,7 @@
 ---
 meta:
   name: ts-dev
-  description: |
-    Expert TypeScript/JavaScript developer with integrated code quality and LSP tooling.
-    Use PROACTIVELY when:
-    - Checking TypeScript/JavaScript code quality (linting, types, formatting)
-    - Understanding code structure (imports, calls, types, React components)
-    - Debugging TypeScript-specific issues
-    - Reviewing code for best practices
-    
-    Examples:
-    
-    <example>
-    user: 'Check this module for code quality issues'
-    assistant: 'I'll use ts-dev:ts-dev to run comprehensive quality checks.'
-    <commentary>Code quality reviews are ts-dev's domain.</commentary>
-    </example>
-    
-    <example>
-    user: 'Why is TypeScript complaining about this function?'
-    assistant: 'I'll delegate to ts-dev:ts-dev to analyze the type issue.'
-    <commentary>Type checking questions trigger ts-dev.</commentary>
-    </example>
-    
-    <example>
-    user: 'Help me understand how this React component works'
-    assistant: 'I'll use ts-dev:ts-dev to trace the component structure using LSP.'
-    <commentary>Code understanding benefits from LSP + TypeScript expertise.</commentary>
-    </example>
+  description: "Expert TypeScript/JavaScript developer with integrated code quality and LSP tooling. Use PROACTIVELY when checking TypeScript/JavaScript code quality (linting, types, formatting), understanding code structure, debugging TypeScript-specific issues, or reviewing code for best practices.\n\n<example>\nuser: 'Check this module for code quality issues'\nassistant: 'I'll use ts-dev:ts-dev to run comprehensive quality checks.'\n<commentary>Code quality reviews are ts-dev's domain.</commentary>\n</example>\n\n<example>\nuser: 'Why is TypeScript complaining about this function?'\nassistant: 'I'll delegate to ts-dev:ts-dev to analyze the type issue.'\n<commentary>Type checking questions trigger ts-dev.</commentary>\n</example>"
 
 tools:
   - module: tool-ts-check

@@ -1,33 +1,7 @@
 ---
 meta:
   name: node-dev
-  description: |
-    Expert Node.js backend developer specializing in async patterns, error handling, security, and APIs.
-    Use PROACTIVELY when:
-    - Working with Node.js backend code (Express, Fastify, etc.)
-    - Debugging async issues, memory leaks, or performance problems
-    - Reviewing code for security vulnerabilities
-    - Designing REST APIs or handling errors
-    
-    Examples:
-    
-    <example>
-    user: 'Review this Express app for security issues'
-    assistant: 'I'll use ts-dev:node-dev to audit for security vulnerabilities.'
-    <commentary>Security review is node-dev's specialty.</commentary>
-    </example>
-    
-    <example>
-    user: 'Why is this async function not working correctly?'
-    assistant: 'I'll delegate to ts-dev:node-dev to diagnose the async issue.'
-    <commentary>Async pattern debugging requires Node.js expertise.</commentary>
-    </example>
-    
-    <example>
-    user: 'Help me design a proper error handling strategy'
-    assistant: 'I'll use ts-dev:node-dev to recommend error handling patterns.'
-    <commentary>Error handling architecture is a backend specialty.</commentary>
-    </example>
+  description: "Expert Node.js backend developer specializing in async patterns, error handling, security, and APIs. Use PROACTIVELY when working with Node.js backend code (Express, Fastify, etc.), debugging async issues or memory leaks, reviewing code for security vulnerabilities, or designing REST APIs.\n\n<example>\nuser: 'Review this Express app for security issues'\nassistant: 'I'll use ts-dev:node-dev to audit for security vulnerabilities.'\n<commentary>Security review is node-dev's specialty.</commentary>\n</example>\n\n<example>\nuser: 'Why is this async function not working correctly?'\nassistant: 'I'll delegate to ts-dev:node-dev to diagnose the async issue.'\n<commentary>Async pattern debugging requires Node.js expertise.</commentary>\n</example>"
 
 tools:
   - module: tool-ts-check
