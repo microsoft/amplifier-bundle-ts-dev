@@ -8,9 +8,9 @@ from typing import Any
 
 from amplifier_core import ToolResult
 
-from amplifier_bundle_ts_dev import CheckConfig
-from amplifier_bundle_ts_dev import check_content
-from amplifier_bundle_ts_dev import check_files
+from ._core import CheckConfig
+from ._core import check_content
+from ._core import check_files
 
 
 class TsCheckTool:
