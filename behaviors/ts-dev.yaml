@@ -1,0 +1,62 @@
+# TypeScript/JavaScript Development Behavior
+#
+# Provides comprehensive TypeScript/JavaScript development capabilities:
+# - Code quality checking (ESLint, Prettier, tsc, stub detection)
+# - Automatic checking on file edits (hook)
+# - Expert TS/JS agent
+#
+# Include this behavior to add TypeScript/JavaScript development tools to any bundle.
+
+bundle:
+  name: ts-dev-behavior
+  version: 0.1.0
+  description: TypeScript/JavaScript development tools - quality checks, auto-checking hook, and expert agent
+
+# Tools provided by this behavior
+tools:
+  - module: tool-ts-check
+    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
+    config:
+      # Default configuration - can be overridden in package.json
+      default_checks:
+        - eslint
+        - prettier
+        - tsc
+        - stubs
+
+# Hooks provided by this behavior
+hooks:
+  - module: hooks-ts-check
+    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/hooks-ts-check
+    config:
+      # Enable automatic checking on TypeScript/JavaScript file edits
+      enabled: true
+      # File patterns to check
+      file_patterns:
+        - "*.ts"
+        - "*.tsx"
+        - "*.js"
+        - "*.jsx"
+        - "*.mts"
+        - "*.mjs"
+        - "*.cts"
+        - "*.cjs"
+      # Minimum severity to report: error | warning | info
+      report_level: warning
+      # Inject issues into agent context for awareness
+      auto_inject: true
+      # Which checks to run on every edit
+      checks:
+        - eslint
+        - prettier
+        - tsc
+
+# Agents provided by this behavior
+agents:
+  include:
+    - ts-dev:agents/ts-dev
+
+# Context files loaded with this behavior
+context:
+  include:
+    - ts-dev:context/ts-dev-instructions.md
