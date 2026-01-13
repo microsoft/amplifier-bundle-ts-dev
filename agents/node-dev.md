@@ -7,7 +7,7 @@ meta:
 tools:
   # TypeScript/JavaScript code quality checking
   - module: tool-ts-check
-    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
+    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
   # File reading and editing
   - module: tool-filesystem
     source: git+https://github.com/microsoft/amplifier-module-tool-filesystem@main

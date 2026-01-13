@@ -27,7 +27,7 @@ Comprehensive TypeScript/JavaScript development tools for [Amplifier](https://gi
 ```yaml
 # In your bundle.yaml
 includes:
-  - bundle: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main
 ```
 
 This gives you:

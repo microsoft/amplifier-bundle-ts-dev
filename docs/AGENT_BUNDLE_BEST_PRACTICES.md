@@ -231,7 +231,7 @@ When you include both `exp-delegation` and `ts-dev`:
 ```yaml
 includes:
   - bundle: git+https://github.com/microsoft/amplifier-foundation@main#subdirectory=experiments/delegation-only
-  - bundle: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main
 ```
 
 The ts-dev agents become available alongside foundation agents. Each agent brings its own tools when spawned.

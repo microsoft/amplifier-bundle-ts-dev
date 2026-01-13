@@ -15,7 +15,7 @@ bundle:
 # Tools provided by this behavior
 tools:
   - module: tool-ts-check
-    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
+    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main#subdirectory=modules/tool-ts-check
     config:
       # Default configuration - can be overridden in package.json
       default_checks:
@@ -27,7 +27,7 @@ tools:
 # Hooks provided by this behavior
 hooks:
   - module: hooks-ts-check
-    source: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main#subdirectory=modules/hooks-ts-check
+    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main#subdirectory=modules/hooks-ts-check
     config:
       # Enable automatic checking on TypeScript/JavaScript file edits
       enabled: true

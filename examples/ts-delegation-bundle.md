@@ -7,7 +7,7 @@ bundle:
 # Combine ts-dev capabilities with delegation-only pattern
 includes:
   # TypeScript/JavaScript development tools and agents
-  - bundle: git+https://github.com/robotdad/amplifier-bundle-ts-dev@main
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main
   # Delegation-only foundation (no direct tools, must delegate)
   - bundle: foundation:experiments/delegation-only
 
