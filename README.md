@@ -119,6 +119,12 @@ Configure via `package.json`:
 }
 ```
 
+Project configuration cannot enable executable checks. ESLint, Prettier, and `tsc`
+are disabled unless trusted host/module configuration sets
+`allow_external_tools: true`; the built-in stub check remains available. Enabling
+external tools permits project-local binaries and project configuration/plugins
+to execute, so only opt in for workspaces you trust.
+
 Hook configuration:
 
 ```json
@@ -186,6 +192,10 @@ npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
 # Global installation
 npm install -g eslint prettier typescript
 ```
+
+After installation, a trusted host configuration must also set
+`allow_external_tools: true`. File operands are canonicalized to the workspace,
+and paths beginning with `-` or escaping the workspace are rejected.
 
 ## Context Files
 

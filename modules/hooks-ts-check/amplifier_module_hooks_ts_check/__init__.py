@@ -13,7 +13,9 @@ from amplifier_core import HookResult
 from ._core import CheckConfig
 from ._core import Severity
 from ._core import check_files
+from ._core import find_project_root
 from ._core import load_config
+from ._core import validate_paths
 
 
 class TsCheckHooks:
@@ -50,6 +52,7 @@ class TsCheckHooks:
             enable_prettier="prettier" in self.checks,
             enable_tsc="tsc" in self.checks,
             enable_stub_check="stubs" in self.checks,
+            allow_external_tools=config.get("allow_external_tools", False),
         )
 
     def _matches_patterns(self, file_path: str) -> bool:
@@ -108,12 +111,17 @@ class TsCheckHooks:
         if not self._matches_patterns(file_path):
             return HookResult(action="continue")
 
+        try:
+            validated_path = validate_paths([file_path], find_project_root())[0]
+        except ValueError as exc:
+            return HookResult(action="continue", user_message=str(exc), user_message_level="error")
+
         # Check if file exists (might have been deleted)
-        if not Path(file_path).exists():
+        if not Path(validated_path).exists():
             return HookResult(action="continue")
 
         # Run checks
-        result = check_files([file_path], config=self.check_config)
+        result = check_files([validated_path], config=self.check_config)
 
         # Filter by report level
         result.issues = self._filter_by_level(result.issues)
@@ -126,7 +134,7 @@ class TsCheckHooks:
 
         if self.auto_inject:
             # Inject issues into agent context
-            context_text = f"TS/JS check found issues in {file_path}:\n{hook_output['issues_text']}"
+            context_text = f"TS/JS check found issues in {validated_path}:\n{hook_output['issues_text']}"
 
             return HookResult(
                 action="inject_context",

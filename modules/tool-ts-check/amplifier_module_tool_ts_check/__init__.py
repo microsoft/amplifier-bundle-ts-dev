@@ -4,6 +4,7 @@ This module provides the `ts_check` tool that agents can use to
 check TypeScript/JavaScript code for formatting, linting, type errors, and stubs.
 """
 
+from pathlib import Path
 from typing import Any
 
 from amplifier_core import ToolResult
@@ -11,10 +12,15 @@ from amplifier_core import ToolResult
 from ._core import CheckConfig
 from ._core import check_content
 from ._core import check_files
+from ._core import find_project_root
+from ._core import validate_paths
 
 
 class TsCheckTool:
     """Tool for checking TypeScript/JavaScript code quality."""
+
+    def __init__(self, config: dict[str, Any] | None = None):
+        self.module_config = config or {}
 
     @property
     def name(self) -> str:
@@ -93,6 +99,7 @@ Returns:
             config_overrides["enable_prettier"] = "prettier" in checks
             config_overrides["enable_tsc"] = "tsc" in checks
             config_overrides["enable_stub_check"] = "stubs" in checks
+        config_overrides["allow_external_tools"] = self.module_config.get("allow_external_tools", False)
 
         config = CheckConfig.from_dict(config_overrides) if config_overrides else None
 
@@ -100,7 +107,11 @@ Returns:
         if content:
             result = check_content(content, config=config)
         elif paths:
-            result = check_files(paths, config=config, fix=fix)
+            try:
+                validated_paths = [Path(path) for path in validate_paths(paths, find_project_root())]
+            except ValueError as exc:
+                return ToolResult(success=False, output={"error": str(exc), "code": "INVALID-PATH"})
+            result = check_files(validated_paths, config=config, fix=fix)
         else:
             # Default to current directory
             result = check_files(["."], config=config, fix=fix)
@@ -118,7 +129,7 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
     Returns:
         Module metadata
     """
-    tool = TsCheckTool()
+    tool = TsCheckTool(config)
 
     # Register the tool
     await coordinator.mount("tools", tool, name=tool.name)
