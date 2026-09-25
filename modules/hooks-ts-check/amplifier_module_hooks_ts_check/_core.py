@@ -191,7 +191,7 @@ def load_config(project_root: Path | None = None) -> CheckConfig:
         return CheckConfig()
 
     package_json = project_root / "package.json"
-    if not package_json.exists():
+    if not package_json.resolve().is_relative_to(project_root.resolve()) or not package_json.exists():
         return CheckConfig()
 
     try:
@@ -254,18 +254,31 @@ class TypeScriptChecker:
     JS_EXTENSIONS = {".js", ".jsx", ".mjs", ".cjs"}
     ALL_EXTENSIONS = TS_EXTENSIONS | JS_EXTENSIONS
 
-    def __init__(self, config: CheckConfig | None = None):
-        """Initialize checker with optional config."""
-        self.config = config or load_config()
-        self.project_root = find_project_root()
+    def __init__(
+        self,
+        config: CheckConfig | None = None,
+        *,
+        working_dir: Path | None = None,
+        workspace_root: Path | None = None,
+    ):
+        """Keep operand cwd, host authorization boundary, and package root distinct."""
+        self.working_dir = (working_dir or Path.cwd()).resolve()
+        self.workspace_root = (workspace_root or self.working_dir).resolve()
+        if not self.working_dir.is_relative_to(self.workspace_root):
+            raise ValueError("Working directory is outside the workspace")
+        project_root = find_project_root(self.working_dir)
+        self.project_root = (
+            project_root if project_root and project_root.is_relative_to(self.workspace_root) else self.working_dir
+        )
+        self.config = config or load_config(self.project_root)
 
     def check_files(self, paths: list[str | Path], fix: bool = False) -> CheckResult:
         """Run all enabled checks on the given paths."""
         if not paths:
-            paths = [Path.cwd()]
+            paths = [self.working_dir]
 
         try:
-            path_strs = validate_paths(paths, self.project_root)
+            path_strs = validate_paths(paths, self.workspace_root, self.working_dir)
         except ValueError as exc:
             return CheckResult(
                 issues=[
@@ -304,7 +317,7 @@ class TypeScriptChecker:
         """Check TypeScript/JavaScript content string."""
         ext = Path(filename).suffix or ".ts"
 
-        temp_dir = self.project_root or Path.cwd()
+        temp_dir = self.working_dir
         with tempfile.NamedTemporaryFile(mode="w", suffix=ext, dir=temp_dir, delete=False) as f:
             f.write(content)
             temp_path = f.name
@@ -332,19 +345,24 @@ class TypeScriptChecker:
 
     def _find_executable(self, name: str) -> str | None:
         """Find an executable only after the caller explicitly trusts external tools."""
-        if not self.config.allow_external_tools:
+        if self.config.allow_external_tools is not True:
             return None
 
         if self.project_root:
-            bin_dir = (self.project_root / "node_modules" / ".bin").resolve()
-            local_bin = (bin_dir / name).resolve()
-            if local_bin.is_file() and local_bin.is_relative_to(bin_dir):
+            # npm's .bin links normally point to sibling packages, not into .bin.
+            install_dir = self.project_root / "node_modules"
+            local_bin = (install_dir / ".bin" / name).resolve()
+            if (
+                local_bin.is_relative_to(install_dir)
+                and local_bin.is_relative_to(self.workspace_root)
+                and local_bin.is_file()
+            ):
                 return str(local_bin)
 
         return shutil.which(name)
 
     def _tool_unavailable(self, name: str) -> CheckResult:
-        if not self.config.allow_external_tools:
+        if self.config.allow_external_tools is not True:
             return CheckResult(
                 issues=[
                     Issue(
@@ -396,7 +414,7 @@ class TypeScriptChecker:
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.working_dir)
         except subprocess.TimeoutExpired:
             return CheckResult(
                 issues=[
@@ -470,7 +488,7 @@ class TypeScriptChecker:
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.working_dir)
         except subprocess.TimeoutExpired:
             return CheckResult(
                 issues=[
@@ -557,7 +575,7 @@ class TypeScriptChecker:
             cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.working_dir)
         except subprocess.TimeoutExpired:
             return CheckResult(
                 issues=[
@@ -649,6 +667,22 @@ class TypeScriptChecker:
         issues = []
 
         try:
+            # Directory discovery does not authorize its children. Recheck at the read.
+            file_path = Path(validate_paths([file_path], self.workspace_root, self.working_dir)[0])
+        except ValueError as exc:
+            return [
+                Issue(
+                    file=str(file_path),
+                    line=0,
+                    column=0,
+                    code="INVALID-PATH",
+                    message=str(exc),
+                    severity=Severity.ERROR,
+                    source="stub-check",
+                )
+            ]
+
+        try:
             content = file_path.read_text(encoding="utf-8")
             lines = content.split("\n")
         except Exception:
@@ -691,9 +725,14 @@ class TypeScriptChecker:
         return ("/scripts/" in file_str or "/tools/" in file_str) and "console." in line
 
 
-def validate_paths(paths: list[str | Path], workspace_root: Path | None = None) -> list[str]:
+def validate_paths(
+    paths: list[str | Path],
+    workspace_root: Path | None = None,
+    working_dir: Path | None = None,
+) -> list[str]:
     """Return canonical workspace-contained path operands safe for CLI use."""
-    root = (workspace_root or Path.cwd()).resolve()
+    cwd = (working_dir or Path.cwd()).resolve()
+    root = (workspace_root or cwd).resolve()
     validated = []
 
     for path_value in paths:
@@ -702,7 +741,7 @@ def validate_paths(paths: list[str | Path], workspace_root: Path | None = None) 
             raise ValueError(f"Path operands must not begin with '-': {raw_path}")
 
         path = Path(raw_path)
-        resolved = (path if path.is_absolute() else root / path).resolve()
+        resolved = (path if path.is_absolute() else cwd / path).resolve()
         if not resolved.is_relative_to(root):
             raise ValueError(f"Path is outside the workspace: {raw_path}")
         validated.append(str(resolved))
@@ -710,13 +749,27 @@ def validate_paths(paths: list[str | Path], workspace_root: Path | None = None) 
     return validated
 
 
-def check_files(paths: list[str | Path], config: CheckConfig | None = None, fix: bool = False) -> CheckResult:
+def check_files(
+    paths: list[str | Path],
+    config: CheckConfig | None = None,
+    fix: bool = False,
+    *,
+    working_dir: Path | None = None,
+    workspace_root: Path | None = None,
+) -> CheckResult:
     """Check TypeScript/JavaScript files for issues."""
-    checker = TypeScriptChecker(config)
+    checker = TypeScriptChecker(config, working_dir=working_dir, workspace_root=workspace_root)
     return checker.check_files(paths, fix=fix)
 
 
-def check_content(content: str, filename: str = "stdin.ts", config: CheckConfig | None = None) -> CheckResult:
+def check_content(
+    content: str,
+    filename: str = "stdin.ts",
+    config: CheckConfig | None = None,
+    *,
+    working_dir: Path | None = None,
+    workspace_root: Path | None = None,
+) -> CheckResult:
     """Check TypeScript/JavaScript content string."""
-    checker = TypeScriptChecker(config)
+    checker = TypeScriptChecker(config, working_dir=working_dir, workspace_root=workspace_root)
     return checker.check_content(content, filename)

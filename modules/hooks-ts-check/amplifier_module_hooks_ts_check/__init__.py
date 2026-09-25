@@ -13,8 +13,6 @@ from amplifier_core import HookResult
 from ._core import CheckConfig
 from ._core import Severity
 from ._core import check_files
-from ._core import find_project_root
-from ._core import load_config
 from ._core import validate_paths
 
 
@@ -26,7 +24,7 @@ class TsCheckHooks:
     JS_EXTENSIONS = {".js", ".jsx", ".mjs", ".cjs"}
     ALL_EXTENSIONS = TS_EXTENSIONS | JS_EXTENSIONS
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None, *, working_dir: Path | None = None):
         """Initialize hooks with configuration.
 
         Args:
@@ -38,6 +36,12 @@ class TsCheckHooks:
                 - checks: list[str] (default: all) - which checks to run
         """
         config = config or {}
+        self.working_dir = (working_dir or Path.cwd()).resolve()
+        self.workspace_root = Path(config.get("workspace_root", self.working_dir))
+        if not self.workspace_root.is_absolute():
+            raise ValueError("Host workspace_root must be absolute")
+        self.workspace_root = self.workspace_root.resolve()
+        validate_paths([self.working_dir], self.workspace_root, self.working_dir)
         self.enabled = config.get("enabled", True)
         self.file_patterns = config.get(
             "file_patterns", ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mts", "*.mjs", "*.cts", "*.cjs"]
@@ -52,7 +56,7 @@ class TsCheckHooks:
             enable_prettier="prettier" in self.checks,
             enable_tsc="tsc" in self.checks,
             enable_stub_check="stubs" in self.checks,
-            allow_external_tools=config.get("allow_external_tools", False),
+            allow_external_tools=config.get("allow_external_tools") is True,
         )
 
     def _matches_patterns(self, file_path: str) -> bool:
@@ -112,7 +116,7 @@ class TsCheckHooks:
             return HookResult(action="continue")
 
         try:
-            validated_path = validate_paths([file_path], find_project_root())[0]
+            validated_path = validate_paths([file_path], self.workspace_root, self.working_dir)[0]
         except ValueError as exc:
             return HookResult(action="continue", user_message=str(exc), user_message_level="error")
 
@@ -121,7 +125,12 @@ class TsCheckHooks:
             return HookResult(action="continue")
 
         # Run checks
-        result = check_files([validated_path], config=self.check_config)
+        result = check_files(
+            [validated_path],
+            config=self.check_config,
+            working_dir=self.working_dir,
+            workspace_root=self.workspace_root,
+        )
 
         # Filter by report level
         result.issues = self._filter_by_level(result.issues)
@@ -162,7 +171,8 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
     Returns:
         Module metadata
     """
-    hooks = TsCheckHooks(config)
+    working_dir = coordinator.get_capability("session.working_dir")
+    hooks = TsCheckHooks(config, working_dir=Path(working_dir) if working_dir else None)
 
     # Register the post-tool hook
     coordinator.hooks.register(

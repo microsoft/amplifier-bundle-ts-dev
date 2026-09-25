@@ -33,7 +33,7 @@ def load_config(project_root: Path | None = None) -> CheckConfig:
         return CheckConfig()
 
     package_json = project_root / "package.json"
-    if not package_json.exists():
+    if not package_json.resolve().is_relative_to(project_root.resolve()) or not package_json.exists():
         return CheckConfig()
 
     try:
