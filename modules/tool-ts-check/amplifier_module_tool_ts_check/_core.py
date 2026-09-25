@@ -129,6 +129,7 @@ class CheckConfig:
     enable_prettier: bool = True
     enable_tsc: bool = True
     enable_stub_check: bool = True
+    allow_external_tools: bool = False
 
     exclude_patterns: list[str] = field(
         default_factory=lambda: [
@@ -163,6 +164,7 @@ class CheckConfig:
             enable_prettier=data.get("enable_prettier", True),
             enable_tsc=data.get("enable_tsc", True),
             enable_stub_check=data.get("enable_stub_check", True),
+            allow_external_tools=data.get("allow_external_tools", False),
             exclude_patterns=data.get("exclude_patterns", cls().exclude_patterns),
         )
 
@@ -189,14 +191,15 @@ def load_config(project_root: Path | None = None) -> CheckConfig:
         return CheckConfig()
 
     package_json = project_root / "package.json"
-    if not package_json.exists():
+    if not package_json.resolve().is_relative_to(project_root.resolve()) or not package_json.exists():
         return CheckConfig()
 
     try:
         with open(package_json) as f:
             pkg: dict[str, Any] = json.load(f)
 
-        config_data: dict[str, Any] = pkg.get("amplifier-ts-dev", {})
+        config_data: dict[str, Any] = dict(pkg.get("amplifier-ts-dev", {}))
+        config_data.pop("allow_external_tools", None)
         return CheckConfig.from_dict(config_data)
     except (json.JSONDecodeError, OSError):
         return CheckConfig()
@@ -251,17 +254,45 @@ class TypeScriptChecker:
     JS_EXTENSIONS = {".js", ".jsx", ".mjs", ".cjs"}
     ALL_EXTENSIONS = TS_EXTENSIONS | JS_EXTENSIONS
 
-    def __init__(self, config: CheckConfig | None = None):
-        """Initialize checker with optional config."""
-        self.config = config or load_config()
-        self.project_root = find_project_root()
+    def __init__(
+        self,
+        config: CheckConfig | None = None,
+        *,
+        working_dir: Path | None = None,
+        workspace_root: Path | None = None,
+    ):
+        """Keep operand cwd, host authorization boundary, and package root distinct."""
+        self.working_dir = (working_dir or Path.cwd()).resolve()
+        self.workspace_root = (workspace_root or self.working_dir).resolve()
+        if not self.working_dir.is_relative_to(self.workspace_root):
+            raise ValueError("Working directory is outside the workspace")
+        project_root = find_project_root(self.working_dir)
+        self.project_root = (
+            project_root if project_root and project_root.is_relative_to(self.workspace_root) else self.working_dir
+        )
+        self.config = config or load_config(self.project_root)
 
     def check_files(self, paths: list[str | Path], fix: bool = False) -> CheckResult:
         """Run all enabled checks on the given paths."""
         if not paths:
-            paths = [Path.cwd()]
+            paths = [self.working_dir]
 
-        path_strs = [str(p) for p in paths]
+        try:
+            path_strs = validate_paths(paths, self.workspace_root, self.working_dir)
+        except ValueError as exc:
+            return CheckResult(
+                issues=[
+                    Issue(
+                        file="",
+                        line=0,
+                        column=0,
+                        code="INVALID-PATH",
+                        message=str(exc),
+                        severity=Severity.ERROR,
+                        source="ts-check",
+                    )
+                ]
+            )
         results = CheckResult(files_checked=self._count_ts_js_files(path_strs))
 
         if self.config.enable_eslint:
@@ -286,7 +317,8 @@ class TypeScriptChecker:
         """Check TypeScript/JavaScript content string."""
         ext = Path(filename).suffix or ".ts"
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=ext, delete=False) as f:
+        temp_dir = self.working_dir
+        with tempfile.NamedTemporaryFile(mode="w", suffix=ext, dir=temp_dir, delete=False) as f:
             f.write(content)
             temp_path = f.name
 
@@ -312,33 +344,64 @@ class TypeScriptChecker:
         return count
 
     def _find_executable(self, name: str) -> str | None:
-        """Find executable, preferring local node_modules."""
+        """Find an executable only after the caller explicitly trusts external tools."""
+        if self.config.allow_external_tools is not True:
+            return None
+
         if self.project_root:
-            local_bin = self.project_root / "node_modules" / ".bin" / name
-            if local_bin.exists():
+            # npm's .bin links normally point to sibling packages, not into .bin.
+            install_dir = self.project_root / "node_modules"
+            local_bin = (install_dir / ".bin" / name).resolve()
+            if (
+                local_bin.is_relative_to(install_dir)
+                and local_bin.is_relative_to(self.workspace_root)
+                and local_bin.is_file()
+            ):
                 return str(local_bin)
 
         return shutil.which(name)
 
-    def _run_eslint(self, paths: list[str], fix: bool = False) -> CheckResult:
-        """Run ESLint check."""
-        eslint = self._find_executable("eslint")
-
-        if not eslint:
+    def _tool_unavailable(self, name: str) -> CheckResult:
+        if self.config.allow_external_tools is not True:
             return CheckResult(
                 issues=[
                     Issue(
                         file="",
                         line=0,
                         column=0,
-                        code="TOOL-NOT-FOUND",
-                        message="eslint not found. Install with: npm install -D eslint",
+                        code="TOOL-EXECUTION-DISABLED",
+                        message=(
+                            f"{name} was not run because external tools are disabled. "
+                            "Set allow_external_tools in trusted host configuration to opt in."
+                        ),
                         severity=Severity.WARNING,
-                        source="eslint",
+                        source=name,
                     )
                 ],
-                checks_run=["eslint"],
+                checks_run=[name],
             )
+
+        return CheckResult(
+            issues=[
+                Issue(
+                    file="",
+                    line=0,
+                    column=0,
+                    code="TOOL-NOT-FOUND",
+                    message=f"{name} not found. Install it in the trusted host environment.",
+                    severity=Severity.WARNING,
+                    source=name,
+                )
+            ],
+            checks_run=[name],
+        )
+
+    def _run_eslint(self, paths: list[str], fix: bool = False) -> CheckResult:
+        """Run ESLint check."""
+        eslint = self._find_executable("eslint")
+
+        if not eslint:
+            return self._tool_unavailable("eslint")
 
         cmd = [eslint, "--format=json"]
         if fix:
@@ -347,10 +410,11 @@ class TypeScriptChecker:
         if not has_eslint_config(self.project_root):
             cmd.extend(["--no-eslintrc", "--env", "browser,node,es2022"])
 
+        cmd.append("--")
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.working_dir)
         except subprocess.TimeoutExpired:
             return CheckResult(
                 issues=[
@@ -416,30 +480,15 @@ class TypeScriptChecker:
         prettier = self._find_executable("prettier")
 
         if not prettier:
-            return CheckResult(
-                issues=[
-                    Issue(
-                        file="",
-                        line=0,
-                        column=0,
-                        code="TOOL-NOT-FOUND",
-                        message="prettier not found. Install with: npm install -D prettier",
-                        severity=Severity.WARNING,
-                        source="prettier",
-                    )
-                ],
-                checks_run=["prettier"],
-            )
+            return self._tool_unavailable("prettier")
 
-        if fix:
-            cmd = [prettier, "--write"]
-        else:
-            cmd = [prettier, "--check"]
+        cmd = [prettier, "--write"] if fix else [prettier, "--check"]
 
+        cmd.append("--")
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.working_dir)
         except subprocess.TimeoutExpired:
             return CheckResult(
                 issues=[
@@ -515,20 +564,7 @@ class TypeScriptChecker:
         tsc = self._find_executable("tsc")
 
         if not tsc:
-            return CheckResult(
-                issues=[
-                    Issue(
-                        file="",
-                        line=0,
-                        column=0,
-                        code="TOOL-NOT-FOUND",
-                        message="tsc not found. Install with: npm install -D typescript",
-                        severity=Severity.WARNING,
-                        source="tsc",
-                    )
-                ],
-                checks_run=["tsc"],
-            )
+            return self._tool_unavailable("tsc")
 
         cmd = [tsc, "--noEmit", "--pretty", "false"]
 
@@ -539,7 +575,7 @@ class TypeScriptChecker:
             cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.working_dir)
         except subprocess.TimeoutExpired:
             return CheckResult(
                 issues=[
@@ -631,6 +667,22 @@ class TypeScriptChecker:
         issues = []
 
         try:
+            # Directory discovery does not authorize its children. Recheck at the read.
+            file_path = Path(validate_paths([file_path], self.workspace_root, self.working_dir)[0])
+        except ValueError as exc:
+            return [
+                Issue(
+                    file=str(file_path),
+                    line=0,
+                    column=0,
+                    code="INVALID-PATH",
+                    message=str(exc),
+                    severity=Severity.ERROR,
+                    source="stub-check",
+                )
+            ]
+
+        try:
             content = file_path.read_text(encoding="utf-8")
             lines = content.split("\n")
         except Exception:
@@ -670,20 +722,54 @@ class TypeScriptChecker:
         if file_path.suffix == ".d.ts":
             return True
 
-        if "/scripts/" in file_str or "/tools/" in file_str:
-            if "console." in line:
-                return True
-
-        return False
+        return ("/scripts/" in file_str or "/tools/" in file_str) and "console." in line
 
 
-def check_files(paths: list[str | Path], config: CheckConfig | None = None, fix: bool = False) -> CheckResult:
+def validate_paths(
+    paths: list[str | Path],
+    workspace_root: Path | None = None,
+    working_dir: Path | None = None,
+) -> list[str]:
+    """Return canonical workspace-contained path operands safe for CLI use."""
+    cwd = (working_dir or Path.cwd()).resolve()
+    root = (workspace_root or cwd).resolve()
+    validated = []
+
+    for path_value in paths:
+        raw_path = str(path_value)
+        if raw_path.startswith("-"):
+            raise ValueError(f"Path operands must not begin with '-': {raw_path}")
+
+        path = Path(raw_path)
+        resolved = (path if path.is_absolute() else cwd / path).resolve()
+        if not resolved.is_relative_to(root):
+            raise ValueError(f"Path is outside the workspace: {raw_path}")
+        validated.append(str(resolved))
+
+    return validated
+
+
+def check_files(
+    paths: list[str | Path],
+    config: CheckConfig | None = None,
+    fix: bool = False,
+    *,
+    working_dir: Path | None = None,
+    workspace_root: Path | None = None,
+) -> CheckResult:
     """Check TypeScript/JavaScript files for issues."""
-    checker = TypeScriptChecker(config)
+    checker = TypeScriptChecker(config, working_dir=working_dir, workspace_root=workspace_root)
     return checker.check_files(paths, fix=fix)
 
 
-def check_content(content: str, filename: str = "stdin.ts", config: CheckConfig | None = None) -> CheckResult:
+def check_content(
+    content: str,
+    filename: str = "stdin.ts",
+    config: CheckConfig | None = None,
+    *,
+    working_dir: Path | None = None,
+    workspace_root: Path | None = None,
+) -> CheckResult:
     """Check TypeScript/JavaScript content string."""
-    checker = TypeScriptChecker(config)
+    checker = TypeScriptChecker(config, working_dir=working_dir, workspace_root=workspace_root)
     return checker.check_content(content, filename)

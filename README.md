@@ -119,6 +119,12 @@ Configure via `package.json`:
 }
 ```
 
+Project configuration cannot enable executable checks. ESLint, Prettier, and `tsc`
+are disabled unless trusted host/module configuration sets
+`allow_external_tools: true`; the built-in stub check remains available. Enabling
+external tools permits project-local binaries and project configuration/plugins
+to execute, so only opt in for workspaces you trust.
+
 Hook configuration:
 
 ```json
@@ -186,6 +192,35 @@ npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
 # Global installation
 npm install -g eslint prettier typescript
 ```
+
+After installation, a trusted host configuration must also set
+`allow_external_tools: true`. File operands are canonicalized to the workspace,
+and paths beginning with `-` or escaping the workspace are rejected.
+
+The opt-in must be a boolean `true`, not a string or integer. Standard npm
+`.bin` symlinks to sibling packages inside the project's `node_modules` are
+supported; targets outside that installation tree are not selected as local tools.
+If no permitted local tool exists, trusted host `PATH` lookup remains the fallback.
+Opting in trusts executable code, plugins and project configuration; these checks
+are not a sandbox for ESLint, Prettier or TypeScript.
+
+Both mounted modules resolve relative operands and run subprocesses from the
+host's `session.working_dir` capability (falling back to process cwd at mount
+time). Their authorization boundary defaults to that directory, **not** an
+ancestor inferred from `package.json`. For a session in a package subdirectory,
+the trusted host may explicitly set an absolute `workspace_root` in each module's
+configuration to authorize the containing workspace. The working directory must
+be inside that root. Tool inputs and `package.json` cannot override either value;
+hosts must keep these module settings separate from untrusted project overrides.
+The Python API accepts separate `working_dir` and `workspace_root` keyword
+arguments with the same defaults.
+
+Package discovery cannot enlarge the authorization boundary. Without a wider
+host-supplied root, parent package configuration and parent `node_modules` are
+not used. Built-in recursive scanning revalidates discovered files before reading:
+outside symlink targets produce `INVALID-PATH`, while in-root symlinks still work.
+This is canonical-path confinement, not protection against concurrent filesystem
+replacement between validation and opening.
 
 ## Context Files
 
