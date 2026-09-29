@@ -47,9 +47,7 @@ hooks:
       auto_inject: true
       # Which checks to run on every edit
       checks:
-        - eslint
-        - prettier
-        - tsc
+        - stubs
 
 # Agents provided by this behavior
 # Note: descriptions must be defined here - the bundle loader doesn't parse agent markdown meta sections

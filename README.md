@@ -125,19 +125,17 @@ are disabled unless trusted host/module configuration sets
 external tools permits project-local binaries and project configuration/plugins
 to execute, so only opt in for workspaces you trust.
 
-Hook configuration:
+Hook module configuration:
 
-```json
-{
-  "amplifier-ts-dev": {
-    "hook": {
-      "enabled": true,
-      "file_patterns": ["*.ts", "*.tsx", "*.js", "*.jsx"],
-      "report_level": "warning",
-      "auto_inject": true
-    }
-  }
-}
+```yaml
+hooks:
+  - module: hooks-ts-check
+    config:
+      enabled: true
+      file_patterns: ["*.ts", "*.tsx", "*.js", "*.jsx"]
+      report_level: warning
+      auto_inject: true
+      checks: [stubs]
 ```
 
 ## Hook Behavior
@@ -145,11 +143,18 @@ Hook configuration:
 When enabled, the hook automatically runs checks after TypeScript/JavaScript file edits:
 
 1. You write/edit a `.ts`, `.tsx`, `.js`, or `.jsx` file
-2. Hook triggers and runs ESLint, Prettier, and tsc checks
+2. Hook triggers the built-in stub check only
 3. Issues are injected into agent context
 4. Agent is aware of problems immediately
 
-This creates a tight feedback loop - issues are caught as you work, not at the end.
+The default does not execute project-local tools or configuration. A trusted host
+can opt in to ESLint, Prettier, or `tsc` by setting both
+`allow_external_tools: true` and the desired `checks` in the hook module
+configuration. For example, `checks: [eslint, prettier, tsc, stubs]` restores
+all checks. Only enable executable checks for workspaces you trust.
+
+This creates a tight feedback loop for stub issues without running executables
+on every edit. Trusted hosts can extend it with executable checks when needed.
 
 ## Architecture
 

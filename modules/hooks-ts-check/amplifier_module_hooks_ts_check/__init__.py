@@ -33,7 +33,7 @@ class TsCheckHooks:
                 - file_patterns: list[str] (default: ["*.ts", "*.tsx", "*.js", "*.jsx"])
                 - report_level: str (default: "warning") - minimum level to report
                 - auto_inject: bool (default: True) - inject issues into context
-                - checks: list[str] (default: all) - which checks to run
+                - checks: list[str] (default: ["stubs"]) - which checks to run
         """
         config = config or {}
         self.working_dir = (working_dir or Path.cwd()).resolve()
@@ -48,7 +48,7 @@ class TsCheckHooks:
         )
         self.report_level = config.get("report_level", "warning")
         self.auto_inject = config.get("auto_inject", True)
-        self.checks = config.get("checks", ["eslint", "prettier", "tsc", "stubs"])
+        self.checks = config.get("checks", ["stubs"])
 
         # Build check config
         self.check_config = CheckConfig(

@@ -9,7 +9,7 @@ from typing import Any
 
 from amplifier_core import ToolResult
 
-from ._core import CheckConfig
+from . import _core
 from ._core import check_content
 from ._core import check_files
 from ._core import validate_paths
@@ -97,16 +97,16 @@ Returns:
         fix = input_data.get("fix", False)
         checks = input_data.get("checks")
 
-        # Build config based on requested checks
-        config_overrides = {}
-        if checks:
-            config_overrides["enable_eslint"] = "eslint" in checks
-            config_overrides["enable_prettier"] = "prettier" in checks
-            config_overrides["enable_tsc"] = "tsc" in checks
-            config_overrides["enable_stub_check"] = "stubs" in checks
-        config_overrides["allow_external_tools"] = self.module_config.get("allow_external_tools") is True
-
-        config = CheckConfig.from_dict(config_overrides) if config_overrides else None
+        project_root = _core.find_project_root(self.working_dir)
+        if project_root is None or not project_root.is_relative_to(self.workspace_root):
+            project_root = self.working_dir
+        config = _core.load_config(project_root=project_root)
+        config.allow_external_tools = self.module_config.get("allow_external_tools") is True
+        if checks is not None:
+            config.enable_eslint = "eslint" in checks
+            config.enable_prettier = "prettier" in checks
+            config.enable_tsc = "tsc" in checks
+            config.enable_stub_check = "stubs" in checks
 
         # Run checks
         if content:

@@ -213,7 +213,7 @@ def workspace():
     # Stub detection deliberately suppresses files whose paths contain "test".
     # Use a neutral path so the positive controls exercise real stub detection.
     with tempfile.TemporaryDirectory(prefix="ts-boundary-") as directory:
-        root = Path(directory) / "workspace"
+        root = (Path(directory) / "workspace").resolve()
         root.mkdir()
         (root / "package.json").write_text("{}")
         yield root
@@ -393,7 +393,10 @@ def test_mounted_adapters_use_host_session_cwd(adapter, workspace, monkeypatch):
     output = str(vars(result))
     assert "CHILD_MARKER" in output
     assert "WRONG_MARKER" not in output
-    assert "TOOL-EXECUTION-DISABLED" in output
+    if adapter[0] == "tool":
+        assert "TOOL-EXECUTION-DISABLED" in output
+    else:
+        assert "TOOL-EXECUTION-DISABLED" not in output
     denied = invoke_handler(adapter, handler, "../../private.ts", workspace_root="/")
     assert "outside the workspace" in str(vars(denied))
 
@@ -401,7 +404,10 @@ def test_mounted_adapters_use_host_session_cwd(adapter, workspace, monkeypatch):
 @pytest.mark.parametrize("trust", ["false", "true", 1, False])
 def test_mounted_adapters_require_boolean_trust(adapter, workspace, trust):
     (workspace / "file.ts").write_text("const value = 1;\n")
-    handler = mounted_handler(adapter, workspace, {"allow_external_tools": trust})
+    config = {"allow_external_tools": trust}
+    if adapter[0] == "hooks":
+        config["checks"] = ["eslint"]
+    handler = mounted_handler(adapter, workspace, config)
     result = invoke_handler(adapter, handler, "file.ts")
     assert "TOOL-EXECUTION-DISABLED" in str(vars(result))
 
@@ -439,6 +445,133 @@ def test_mounted_adapters_do_not_authorize_parent_by_discovery(adapter, workspac
     handler = mounted_handler(adapter, child, {})
     result = invoke_handler(adapter, handler, "../file.ts")
     assert "outside the workspace" in str(vars(result))
+
+
+@pytest.mark.parametrize("adapter", ["hooks"], indirect=True)
+def test_behavior_default_hook_runs_only_stubs(adapter, workspace):
+    source = workspace / "file.ts"
+    source.write_text("// TODO: DEFAULT_HOOK_MARKER\n")
+    behavior = (ROOT / "behaviors" / "ts-dev.yaml").read_text()
+    expected_hook_checks = """      checks:
+        - stubs
+"""
+    assert expected_hook_checks in behavior
+    handler = mounted_handler(adapter, workspace, {"checks": ["stubs"]})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = invoke_handler(adapter, handler, "file.ts")
+
+    run.assert_not_called()
+    output = str(vars(result))
+    assert "DEFAULT_HOOK_MARKER" in output
+    assert "TOOL-EXECUTION-DISABLED" not in output
+
+
+@pytest.mark.parametrize("adapter", ["hooks"], indirect=True)
+def test_bare_hook_constructor_runs_only_stubs(adapter, workspace):
+    source = workspace / "file.ts"
+    source.write_text("// TODO: BARE_HOOK_MARKER\n")
+    hooks = adapter[1].TsCheckHooks(working_dir=workspace)
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = asyncio.run(
+            hooks.handle_tool_post("tool:post", {"tool_name": "write_file", "tool_input": {"path": "file.ts"}})
+        )
+
+    run.assert_not_called()
+    output = str(vars(result))
+    assert "BARE_HOOK_MARKER" in output
+    assert "TOOL-EXECUTION-DISABLED" not in output
+
+
+@pytest.mark.parametrize("adapter", ["hooks"], indirect=True)
+def test_trusted_hook_explicit_eslint_check_can_execute(adapter, workspace):
+    source = workspace / "file.ts"
+    source.write_text("const value = 1;\n")
+    hooks = adapter[1].TsCheckHooks(
+        {"allow_external_tools": True, "checks": ["eslint"]},
+        working_dir=workspace,
+    )
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with (
+        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/eslint"),
+        patch.object(
+            core_module.subprocess,
+            "run",
+            return_value=SimpleNamespace(returncode=0, stdout="[]"),
+        ) as run,
+    ):
+        asyncio.run(hooks.handle_tool_post("tool:post", {"tool_name": "write_file", "tool_input": {"path": "file.ts"}}))
+
+    run.assert_called_once()
+
+
+@pytest.mark.parametrize("adapter", ["tool"], indirect=True)
+def test_tool_preserves_project_stub_disable_without_project_trust(adapter, workspace):
+    source = workspace / "file.ts"
+    source.write_text("// TODO: PROJECT_DISABLED_STUB_MARKER\n")
+    (workspace / "package.json").write_text(
+        '{"amplifier-ts-dev":{"enable_stub_check":false,"allow_external_tools":true}}'
+    )
+    handler = mounted_handler(adapter, workspace, {})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = asyncio.run(handler({"paths": ["file.ts"]}))
+
+    run.assert_not_called()
+    assert all(issue["code"] != "STUB" for issue in result.output["issues"])
+    assert {issue["code"] for issue in result.output["issues"]} == {"TOOL-EXECUTION-DISABLED"}
+
+
+@pytest.mark.parametrize("adapter", ["tool"], indirect=True)
+def test_tool_explicit_stubs_override_project_stub_disable(adapter, workspace):
+    source = workspace / "file.ts"
+    source.write_text("// TODO: EXPLICIT_STUB_MARKER\n")
+    (workspace / "package.json").write_text('{"amplifier-ts-dev":{"enable_stub_check":false}}')
+    handler = mounted_handler(adapter, workspace, {})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = asyncio.run(handler({"paths": ["file.ts"], "checks": ["stubs"]}))
+
+    run.assert_not_called()
+    assert {issue["code"] for issue in result.output["issues"]} == {"STUB"}
+
+
+@pytest.mark.parametrize("adapter", ["tool"], indirect=True)
+def test_tool_preserves_project_exclude_patterns(adapter, workspace):
+    source = workspace / "excluded.ts"
+    source.write_text("// TODO: EXCLUDED_BY_PROJECT_CONFIG\n")
+    (workspace / "package.json").write_text('{"amplifier-ts-dev":{"exclude_patterns":["excluded"]}}')
+    handler = mounted_handler(adapter, workspace, {})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = asyncio.run(handler({"paths": ["."]}))
+
+    run.assert_not_called()
+    assert all(issue["code"] != "STUB" for issue in result.output["issues"])
+
+
+@pytest.mark.parametrize("adapter", ["tool"], indirect=True)
+def test_tool_does_not_load_parent_package_outside_workspace(adapter, workspace):
+    child = workspace / "nested"
+    child.mkdir()
+    source = child / "file.ts"
+    source.write_text("// TODO: OUTSIDE_PARENT_CONFIG_MARKER\n")
+    (workspace / "package.json").write_text('{"amplifier-ts-dev":{"enable_stub_check":false}}')
+    handler = mounted_handler(adapter, child, {})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = asyncio.run(handler({"paths": ["file.ts"]}))
+
+    run.assert_not_called()
+    assert any(issue["code"] == "STUB" for issue in result.output["issues"])
 
 
 def test_shared_content_uses_session_directory(core, workspace, monkeypatch):
