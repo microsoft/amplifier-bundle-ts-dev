@@ -168,7 +168,7 @@ class TypeScriptChecker:
                             f"{name} was not run because external tools are disabled. "
                             "Set allow_external_tools in trusted host configuration to opt in."
                         ),
-                        severity=Severity.WARNING,
+                        severity=Severity.ERROR,
                         source=name,
                     )
                 ],

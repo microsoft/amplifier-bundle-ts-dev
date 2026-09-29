@@ -102,7 +102,7 @@ Returns:
             project_root = self.working_dir
         config = _core.load_config(project_root=project_root)
         config.allow_external_tools = self.module_config.get("allow_external_tools") is True
-        if checks is not None:
+        if checks:
             config.enable_eslint = "eslint" in checks
             config.enable_prettier = "prettier" in checks
             config.enable_tsc = "tsc" in checks

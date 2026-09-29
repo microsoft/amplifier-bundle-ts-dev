@@ -51,6 +51,8 @@ def test_all_checker_copies_disable_untrusted_external_tools(tmp_path: Path, cor
 
     run.assert_not_called()
     assert {issue.code for issue in result.issues} == {"TOOL-EXECUTION-DISABLED"}
+    assert result.success is False
+    assert result.to_tool_output()["success"] is False
 
 
 def test_shared_checker_disables_untrusted_external_tools(tmp_path: Path) -> None:
@@ -64,6 +66,8 @@ def test_shared_checker_disables_untrusted_external_tools(tmp_path: Path) -> Non
 
     run.assert_not_called()
     assert {issue.code for issue in result.issues} == {"TOOL-EXECUTION-DISABLED"}
+    assert result.success is False
+    assert result.to_tool_output()["success"] is False
 
 
 def test_checker_rejects_option_and_outside_workspace_paths(tmp_path: Path) -> None:
@@ -303,6 +307,7 @@ def test_only_literal_true_authorizes_lookup(core, workspace, trust):
         result = checker.check_files(["."])
     which.assert_not_called()
     assert {issue.code for issue in result.issues} == {"TOOL-EXECUTION-DISABLED"}
+    assert result.success is False
 
 
 def test_relative_paths_use_cwd_not_package_root(core, workspace, monkeypatch):
@@ -525,6 +530,26 @@ def test_tool_preserves_project_stub_disable_without_project_trust(adapter, work
     run.assert_not_called()
     assert all(issue["code"] != "STUB" for issue in result.output["issues"])
     assert {issue["code"] for issue in result.output["issues"]} == {"TOOL-EXECUTION-DISABLED"}
+    assert result.success is False
+    assert result.output["success"] is False
+
+
+@pytest.mark.parametrize("adapter", ["tool"], indirect=True)
+def test_tool_empty_check_list_preserves_default_checks(adapter, workspace):
+    source = workspace / "file.ts"
+    source.write_text("// TODO: EMPTY_CHECKS_MARKER\n")
+    handler = mounted_handler(adapter, workspace, {})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
+    with patch.object(core_module.subprocess, "run") as run:
+        result = asyncio.run(handler({"paths": ["file.ts"], "checks": []}))
+
+    run.assert_not_called()
+    assert result.success is False
+    assert result.output["success"] is False
+    assert "stub-check" in result.output["checks_run"]
+    assert {issue["code"] for issue in result.output["issues"]} == {"STUB", "TOOL-EXECUTION-DISABLED"}
+    assert any("EMPTY_CHECKS_MARKER" in issue["message"] for issue in result.output["issues"])
 
 
 @pytest.mark.parametrize("adapter", ["tool"], indirect=True)
