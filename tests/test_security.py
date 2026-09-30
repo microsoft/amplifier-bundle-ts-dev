@@ -393,39 +393,63 @@ def test_mounted_adapters_use_host_session_cwd(adapter, workspace, monkeypatch):
     (child / "file.ts").write_text("// TODO: CHILD_MARKER\n")
     (workspace / "file.ts").write_text("// TODO: WRONG_MARKER\n")
     monkeypatch.chdir(workspace.parent)
-    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace))
-    handler = mounted_handler(adapter, child, {})
-    checks = {"checks": ["stubs"]} if adapter[0] == "tool" else {}
-    result = invoke_handler(adapter, handler, "file.ts", **checks)
+    handler = mounted_handler(adapter, child, {"workspace_root": str(workspace)})
+    result = invoke_handler(adapter, handler, "file.ts", allow_external_tools=True, workspace_root="/")
     output = str(vars(result))
     assert "CHILD_MARKER" in output
     assert "WRONG_MARKER" not in output
-    assert "TOOL-EXECUTION-DISABLED" not in output
-    denied = invoke_handler(adapter, handler, "../../private.ts", **checks)
+    if adapter[0] == "tool":
+        assert "TOOL-EXECUTION-DISABLED" in output
+    else:
+        assert "TOOL-EXECUTION-DISABLED" not in output
+    denied = invoke_handler(adapter, handler, "../../private.ts", workspace_root="/")
     assert "outside the workspace" in str(vars(denied))
 
 
-def direct_handler(adapter, working_dir, config):
-    name, module = adapter
-    if name == "tool":
-        return module.TsCheckTool(config, working_dir=working_dir).execute
-    return module.TsCheckHooks(config, working_dir=working_dir).handle_tool_post
+@pytest.mark.parametrize("trust", ["false", "true", 1, False])
+def test_mounted_adapters_require_boolean_trust(adapter, workspace, trust):
+    (workspace / "file.ts").write_text("const value = 1;\n")
+    config = {"allow_external_tools": trust}
+    if adapter[0] == "hooks":
+        config["checks"] = ["eslint"]
+    handler = mounted_handler(adapter, workspace, config)
+    result = invoke_handler(adapter, handler, "file.ts")
+    assert "TOOL-EXECUTION-DISABLED" in str(vars(result))
 
 
-@pytest.mark.parametrize("construction", ["mounted", "direct"])
-def test_module_config_cannot_grant_trust_or_expand_workspace(adapter, workspace, monkeypatch, construction):
-    source = workspace / "file.ts"
-    outside = workspace.parent / "outside.ts"
-    source.write_text("const value = 1;\n")
-    outside.write_text("const outside = 1;\n")
-    (workspace / "package.json").write_text('{"amplifier-ts-dev":{"allow_external_tools":true}}')
-    monkeypatch.delenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", raising=False)
-    config = {"allow_external_tools": True, "workspace_root": "/", "checks": ["eslint"]}
-    handler = (
-        mounted_handler(adapter, workspace, config)
-        if construction == "mounted"
-        else direct_handler(adapter, workspace, config)
+def test_mounted_adapters_keep_authorized_execution_cwd_and_operand(adapter, workspace, monkeypatch):
+    child = workspace / "src"
+    child.mkdir()
+    (child / "file.ts").write_text("const value = 1;\n")
+    monkeypatch.chdir(workspace.parent)
+    handler = mounted_handler(
+        adapter,
+        child,
+        {"workspace_root": str(workspace), "allow_external_tools": True, "checks": ["eslint", "prettier"]},
     )
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+    with (
+        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/tool"),
+        patch.object(core_module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="[]")) as run,
+    ):
+        invoke_handler(adapter, handler, "file.ts", fix=True, checks=["eslint", "prettier"])
+    assert run.call_count == 2
+    for call in run.call_args_list:
+        command = call.args[0]
+        assert command[command.index("--") + 1 :] == [str(child / "file.ts")]
+        assert call.kwargs["cwd"] == child
+    if adapter[0] == "tool":
+        assert "--fix" in run.call_args_list[0].args[0]
+        assert "--write" in run.call_args_list[1].args[0]
+
+
+@pytest.mark.parametrize("module_config", [{}, {"allow_external_tools": False}])
+def test_environment_cannot_authorize_missing_or_false_module_config(adapter, workspace, monkeypatch, module_config):
+    source = workspace / "file.ts"
+    source.write_text("const value = 1;\n")
+    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace))
+    config = {**module_config, "checks": ["eslint"]}
+    handler = mounted_handler(adapter, workspace, config)
     core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
     with patch.object(core_module.subprocess, "run") as run:
@@ -433,80 +457,22 @@ def test_module_config_cannot_grant_trust_or_expand_workspace(adapter, workspace
 
     run.assert_not_called()
     assert "TOOL-EXECUTION-DISABLED" in str(vars(result))
-    rejected = invoke_handler(adapter, handler, outside, checks=["eslint"])
-    assert "outside the workspace" in str(vars(rejected))
 
 
-def test_trusted_workspace_environment_authorizes_only_its_root(adapter, workspace, monkeypatch):
-    child = workspace / "src"
-    child.mkdir()
-    sibling = workspace / "sibling.ts"
-    outside = workspace.parent / "outside.ts"
-    sibling.write_text("const value = 1;\n")
-    outside.write_text("const outside = 1;\n")
-    monkeypatch.chdir(workspace.parent)
-    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace))
-    config = {"allow_external_tools": False, "workspace_root": "/", "checks": ["eslint"]}
-    handler = direct_handler(adapter, child, config)
+def test_environment_cannot_override_true_module_config(adapter, workspace, monkeypatch):
+    source = workspace / "file.ts"
+    source.write_text("const value = 1;\n")
+    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", "poison")
+    handler = mounted_handler(adapter, workspace, {"allow_external_tools": True, "checks": ["eslint"]})
     core_module = sys.modules[f"{adapter[1].__name__}._core"]
+
     with (
-        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/tool"),
+        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/eslint"),
         patch.object(core_module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="[]")) as run,
     ):
-        invoke_handler(adapter, handler, "../sibling.ts", checks=["eslint"])
+        invoke_handler(adapter, handler, "file.ts", checks=["eslint"])
+
     run.assert_called_once()
-    command = run.call_args.args[0]
-    assert command[command.index("--") + 1 :] == [str(sibling)]
-    assert run.call_args.kwargs["cwd"] == child
-    rejected = invoke_handler(adapter, handler, "../../outside.ts", checks=["eslint"])
-    assert "outside the workspace" in str(vars(rejected))
-
-
-@pytest.mark.parametrize("environment", ["missing", "relative", "nonexistent", "file", "unrelated-directory"])
-def test_invalid_trusted_workspace_environment_fails_closed(adapter, workspace, monkeypatch, environment):
-    if environment == "missing":
-        monkeypatch.delenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", raising=False)
-    elif environment == "relative":
-        monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", "relative")
-    elif environment == "nonexistent":
-        monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace / "missing"))
-    elif environment == "file":
-        file_path = workspace / "not-a-directory"
-        file_path.write_text("")
-        monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(file_path))
-    else:
-        unrelated = workspace.parent / "unrelated"
-        unrelated.mkdir()
-        monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(unrelated))
-
-    config = {"allow_external_tools": True, "workspace_root": "/", "checks": ["eslint"]}
-    handler = direct_handler(adapter, workspace, config)
-    instance = handler.__self__
-
-    assert instance.workspace_root == workspace
-    assert instance.allow_external_tools is False
-    if adapter[0] == "hooks":
-        assert instance.check_config.allow_external_tools is False
-
-
-def test_unresolvable_trusted_workspace_environment_fails_closed(adapter, workspace, monkeypatch):
-    unresolvable = workspace / "unresolvable"
-    unresolvable.mkdir()
-    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(unresolvable))
-    module = adapter[1]
-    original_resolve = Path.resolve
-
-    def raise_for_trusted_root(path, *args, **kwargs):
-        if path == unresolvable:
-            raise OSError("cannot resolve trusted workspace")
-        return original_resolve(path, *args, **kwargs)
-
-    monkeypatch.setattr(module.Path, "resolve", raise_for_trusted_root)
-    handler = direct_handler(adapter, workspace, {"allow_external_tools": True, "workspace_root": "/"})
-    instance = handler.__self__
-
-    assert instance.workspace_root == workspace
-    assert instance.allow_external_tools is False
 
 
 def test_mounted_adapters_do_not_authorize_parent_by_discovery(adapter, workspace):
@@ -558,12 +524,11 @@ def test_bare_hook_constructor_runs_only_stubs(adapter, workspace):
 
 
 @pytest.mark.parametrize("adapter", ["hooks"], indirect=True)
-def test_trusted_hook_explicit_eslint_check_can_execute(adapter, workspace, monkeypatch):
+def test_trusted_hook_explicit_eslint_check_can_execute(adapter, workspace):
     source = workspace / "file.ts"
     source.write_text("const value = 1;\n")
-    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace))
     hooks = adapter[1].TsCheckHooks(
-        {"checks": ["eslint"]},
+        {"allow_external_tools": True, "checks": ["eslint"]},
         working_dir=workspace,
     )
     core_module = sys.modules[f"{adapter[1].__name__}._core"]
@@ -683,8 +648,7 @@ def test_mounted_tool_default_directory_and_content(adapter, workspace, monkeypa
     (child / "file.ts").write_text("// TODO: CHILD_MARKER\n")
     (workspace / "wrong.ts").write_text("// TODO: WRONG_MARKER\n")
     monkeypatch.chdir(workspace.parent)
-    monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace))
-    handler = mounted_handler(adapter, child, {})
+    handler = mounted_handler(adapter, child, {"workspace_root": str(workspace)})
     result = asyncio.run(handler({}))
     assert "CHILD_MARKER" in str(result.output)
     assert "WRONG_MARKER" not in str(result.output)

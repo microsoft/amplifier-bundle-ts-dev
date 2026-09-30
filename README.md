@@ -119,24 +119,21 @@ Configure via `package.json`:
 }
 ```
 
-Project configuration cannot enable executable checks. ESLint, Prettier, and `tsc`
-are disabled unless the process that launches Amplifier trusts the workspace; the
-built-in stub check remains available. Enabling external tools permits project-local
-binaries and project configuration/plugins to execute, so only opt in for workspaces
-you trust.
+The `amplifier-ts-dev` section in `package.json` cannot enable executable checks.
+ESLint, Prettier, and `tsc` are disabled unless module configuration sets
+`allow_external_tools: true`; the
+built-in stub check remains available. Module configuration is supplied through the
+application's normal configuration loading. This is a configuration opt-in, not a
+persisted trusted workspace, and requires no launch environment setting.
 
-The host is the process launcher: the person, script, service, or application that
-starts Amplifier. To trust the current physical directory, the launcher sets this
-environment variable when starting Amplifier:
+For the tool module:
 
-```bash
-AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT="$(pwd -P)" amplifier
+```yaml
+tools:
+  - module: tool-ts-check
+    config:
+      allow_external_tools: true
 ```
-
-The value must be an existing absolute directory that contains the session working
-directory. It is a process-start setting, not a repository-managed setting. Legacy
-module configuration fields `allow_external_tools` and `workspace_root` are ignored,
-so project settings and bundle configuration cannot grant this permission.
 
 Hook module configuration:
 
@@ -144,11 +141,8 @@ Hook module configuration:
 hooks:
   - module: hooks-ts-check
     config:
-      enabled: true
-      file_patterns: ["*.ts", "*.tsx", "*.js", "*.jsx"]
-      report_level: warning
-      auto_inject: true
-      checks: [stubs]
+      allow_external_tools: true
+      checks: [eslint, prettier, tsc, stubs]
 ```
 
 ## Hook Behavior
@@ -160,14 +154,14 @@ When enabled, the hook automatically runs checks after TypeScript/JavaScript fil
 3. Issues are injected into agent context
 4. Agent is aware of problems immediately
 
-The default does not execute project-local tools or configuration. A host that starts
-Amplifier with `AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT` set as above can opt in to
-ESLint, Prettier, or `tsc` by selecting them in the hook module configuration. For
-example, `checks: [eslint, prettier, tsc, stubs]` restores all checks. Only enable
-executable checks for workspaces you trust.
+The default does not execute project-local tools or configuration. Set
+`allow_external_tools: true` and select executable checks in the hook module
+configuration to opt in. For example, `checks: [eslint, prettier, tsc, stubs]`
+restores all checks. Enabling external tools permits project-local binaries and
+project configuration/plugins to execute, so only opt in for workspaces you trust.
 
 This creates a tight feedback loop for stub issues without running executables
-on every edit. Trusted hosts can extend it with executable checks when needed.
+on every edit. Module configuration can extend it with executable checks when needed.
 
 ## Architecture
 
@@ -211,39 +205,29 @@ npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
 npm install -g eslint prettier typescript
 ```
 
-After installation, the process that starts Amplifier must set
-`AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT` to the existing absolute workspace
-directory, for example:
-
-```bash
-AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT="$(pwd -P)" amplifier
-```
-
-The variable is read only from the host process environment at module construction.
-It must contain the session working directory; otherwise executable checks stay
-disabled and the session directory remains the workspace boundary. It is not a
-repository-managed setting. `allow_external_tools` and `workspace_root` in module
-configuration are ignored, so no project-level setting can grant executable-check
+After installation, set `allow_external_tools: true` in the tool or hook module
+configuration to run executable checks. Package configuration cannot grant this
 permission. File operands are canonicalized to the workspace, and paths beginning
 with `-` or escaping the workspace are rejected.
 
-Standard npm `.bin` symlinks to sibling packages inside the project's `node_modules`
-are supported; targets outside that installation tree are not selected as local
-tools. If no permitted local tool exists, trusted host `PATH` lookup remains the
-fallback. Opting in trusts executable code, plugins and project configuration; these
-checks are not a sandbox for ESLint, Prettier or TypeScript.
+The opt-in must be a boolean `true`, not a string or integer. Standard npm `.bin`
+symlinks to sibling packages inside the project's `node_modules` are supported;
+targets outside that installation tree are not selected as local tools. If no
+permitted local tool exists, `PATH` lookup remains the fallback. Opting in trusts
+executable code, plugins and project configuration; these checks are not a sandbox
+for ESLint, Prettier or TypeScript.
 
 Both mounted modules resolve relative operands and run subprocesses from the
-host's `session.working_dir` capability (falling back to process cwd at mount
-time). Their authorization boundary defaults to that directory, **not** an
-ancestor inferred from `package.json`. A launcher can authorize a containing
-workspace only with `AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT`; the session working
-directory must be inside that root. Tool inputs, project settings, and bundle
-configuration cannot override either value. The Python API accepts separate
-`working_dir` and `workspace_root` keyword arguments for explicit caller-owned use.
+`session.working_dir` capability (falling back to process cwd at mount time). Their
+authorization boundary defaults to that directory, **not** an ancestor inferred from
+`package.json`. Module configuration can set an optional absolute `workspace_root`
+to use a containing workspace; the session working directory must be inside that
+root. Tool inputs and `package.json` cannot override either value. The Python API
+accepts separate `working_dir` and `workspace_root` keyword arguments with the same
+defaults.
 
 Package discovery cannot enlarge the authorization boundary. Without a wider
-host-supplied root, parent package configuration and parent `node_modules` are
+module-configured root, parent package configuration and parent `node_modules` are
 not used. Built-in recursive scanning revalidates discovered files before reading:
 outside symlink targets produce `INVALID-PATH`, while in-root symlinks still work.
 This is canonical-path confinement, not protection against concurrent filesystem

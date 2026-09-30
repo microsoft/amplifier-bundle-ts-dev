@@ -4,7 +4,6 @@ This module provides the `ts_check` tool that agents can use to
 check TypeScript/JavaScript code for formatting, linting, type errors, and stubs.
 """
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -20,20 +19,12 @@ class TsCheckTool:
     """Tool for checking TypeScript/JavaScript code quality."""
 
     def __init__(self, config: dict[str, Any] | None = None, *, working_dir: Path | None = None):
+        self.module_config = config or {}
         self.working_dir = (working_dir or Path.cwd()).resolve()
-        self.workspace_root = self.working_dir
-        self.allow_external_tools = False
-        trusted_workspace_root = os.environ.get("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT")
-        if trusted_workspace_root:
-            candidate = Path(trusted_workspace_root)
-            if candidate.is_absolute():
-                try:
-                    candidate = candidate.resolve()
-                    if candidate.is_dir() and self.working_dir.is_relative_to(candidate):
-                        self.workspace_root = candidate
-                        self.allow_external_tools = True
-                except (OSError, RuntimeError):
-                    pass
+        self.workspace_root = Path(self.module_config.get("workspace_root", self.working_dir))
+        if not self.workspace_root.is_absolute():
+            raise ValueError("Host workspace_root must be absolute")
+        self.workspace_root = self.workspace_root.resolve()
         validate_paths([self.working_dir], self.workspace_root, self.working_dir)
 
     @property
@@ -110,7 +101,7 @@ Returns:
         if project_root is None or not project_root.is_relative_to(self.workspace_root):
             project_root = self.working_dir
         config = _core.load_config(project_root=project_root)
-        config.allow_external_tools = self.allow_external_tools
+        config.allow_external_tools = self.module_config.get("allow_external_tools") is True
         if checks:
             config.enable_eslint = "eslint" in checks
             config.enable_prettier = "prettier" in checks
