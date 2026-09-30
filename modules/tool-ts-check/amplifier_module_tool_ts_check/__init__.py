@@ -4,17 +4,28 @@ This module provides the `ts_check` tool that agents can use to
 check TypeScript/JavaScript code for formatting, linting, type errors, and stubs.
 """
 
+from pathlib import Path
 from typing import Any
 
 from amplifier_core import ToolResult
 
-from ._core import CheckConfig
+from . import _core
 from ._core import check_content
 from ._core import check_files
+from ._core import validate_paths
 
 
 class TsCheckTool:
     """Tool for checking TypeScript/JavaScript code quality."""
+
+    def __init__(self, config: dict[str, Any] | None = None, *, working_dir: Path | None = None):
+        self.module_config = config or {}
+        self.working_dir = (working_dir or Path.cwd()).resolve()
+        self.workspace_root = Path(self.module_config.get("workspace_root", self.working_dir))
+        if not self.workspace_root.is_absolute():
+            raise ValueError("Host workspace_root must be absolute")
+        self.workspace_root = self.workspace_root.resolve()
+        validate_paths([self.working_dir], self.workspace_root, self.working_dir)
 
     @property
     def name(self) -> str:
@@ -86,24 +97,48 @@ Returns:
         fix = input_data.get("fix", False)
         checks = input_data.get("checks")
 
-        # Build config based on requested checks
-        config_overrides = {}
+        project_root = _core.find_project_root(self.working_dir)
+        if project_root is None or not project_root.is_relative_to(self.workspace_root):
+            project_root = self.working_dir
+        config = _core.load_config(project_root=project_root)
+        config.allow_external_tools = self.module_config.get("allow_external_tools") is True
         if checks:
-            config_overrides["enable_eslint"] = "eslint" in checks
-            config_overrides["enable_prettier"] = "prettier" in checks
-            config_overrides["enable_tsc"] = "tsc" in checks
-            config_overrides["enable_stub_check"] = "stubs" in checks
-
-        config = CheckConfig.from_dict(config_overrides) if config_overrides else None
+            config.enable_eslint = "eslint" in checks
+            config.enable_prettier = "prettier" in checks
+            config.enable_tsc = "tsc" in checks
+            config.enable_stub_check = "stubs" in checks
 
         # Run checks
         if content:
-            result = check_content(content, config=config)
+            result = check_content(
+                content,
+                config=config,
+                working_dir=self.working_dir,
+                workspace_root=self.workspace_root,
+            )
         elif paths:
-            result = check_files(paths, config=config, fix=fix)
+            try:
+                validated_paths: list[str | Path] = [
+                    Path(path) for path in validate_paths(paths, self.workspace_root, self.working_dir)
+                ]
+            except ValueError as exc:
+                return ToolResult(success=False, output={"error": str(exc), "code": "INVALID-PATH"})
+            result = check_files(
+                validated_paths,
+                config=config,
+                fix=fix,
+                working_dir=self.working_dir,
+                workspace_root=self.workspace_root,
+            )
         else:
             # Default to current directory
-            result = check_files(["."], config=config, fix=fix)
+            result = check_files(
+                ["."],
+                config=config,
+                fix=fix,
+                working_dir=self.working_dir,
+                workspace_root=self.workspace_root,
+            )
 
         return ToolResult(success=result.success, output=result.to_tool_output())
 
@@ -118,7 +153,8 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
     Returns:
         Module metadata
     """
-    tool = TsCheckTool()
+    working_dir = coordinator.get_capability("session.working_dir")
+    tool = TsCheckTool(config, working_dir=Path(working_dir) if working_dir else None)
 
     # Register the tool
     await coordinator.mount("tools", tool, name=tool.name)

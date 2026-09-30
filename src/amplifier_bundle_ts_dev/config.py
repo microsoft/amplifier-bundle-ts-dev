@@ -33,14 +33,16 @@ def load_config(project_root: Path | None = None) -> CheckConfig:
         return CheckConfig()
 
     package_json = project_root / "package.json"
-    if not package_json.exists():
+    if not package_json.resolve().is_relative_to(project_root.resolve()) or not package_json.exists():
         return CheckConfig()
 
     try:
         with open(package_json) as f:
             pkg: dict[str, Any] = json.load(f)
 
-        config_data: dict[str, Any] = pkg.get("amplifier-ts-dev", {})
+        config_data: dict[str, Any] = dict(pkg.get("amplifier-ts-dev", {}))
+        # Workspace files cannot grant permission to execute workspace-controlled code.
+        config_data.pop("allow_external_tools", None)
         return CheckConfig.from_dict(config_data)
     except (json.JSONDecodeError, OSError):
         return CheckConfig()

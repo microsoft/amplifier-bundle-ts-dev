@@ -119,19 +119,30 @@ Configure via `package.json`:
 }
 ```
 
-Hook configuration:
+The `amplifier-ts-dev` section in `package.json` cannot enable executable checks.
+ESLint, Prettier, and `tsc` are disabled unless module configuration sets
+`allow_external_tools: true`; the
+built-in stub check remains available. Module configuration is supplied through the
+application's normal configuration loading. This is a configuration opt-in, not a
+persisted trusted workspace, and requires no launch environment setting.
 
-```json
-{
-  "amplifier-ts-dev": {
-    "hook": {
-      "enabled": true,
-      "file_patterns": ["*.ts", "*.tsx", "*.js", "*.jsx"],
-      "report_level": "warning",
-      "auto_inject": true
-    }
-  }
-}
+For the tool module:
+
+```yaml
+tools:
+  - module: tool-ts-check
+    config:
+      allow_external_tools: true
+```
+
+Hook module configuration:
+
+```yaml
+hooks:
+  - module: hooks-ts-check
+    config:
+      allow_external_tools: true
+      checks: [eslint, prettier, tsc, stubs]
 ```
 
 ## Hook Behavior
@@ -139,11 +150,18 @@ Hook configuration:
 When enabled, the hook automatically runs checks after TypeScript/JavaScript file edits:
 
 1. You write/edit a `.ts`, `.tsx`, `.js`, or `.jsx` file
-2. Hook triggers and runs ESLint, Prettier, and tsc checks
+2. Hook triggers the built-in stub check only
 3. Issues are injected into agent context
 4. Agent is aware of problems immediately
 
-This creates a tight feedback loop - issues are caught as you work, not at the end.
+The default does not execute project-local tools or configuration. Set
+`allow_external_tools: true` and select executable checks in the hook module
+configuration to opt in. For example, `checks: [eslint, prettier, tsc, stubs]`
+restores all checks. Enabling external tools permits project-local binaries and
+project configuration/plugins to execute, so only opt in for workspaces you trust.
+
+This creates a tight feedback loop for stub issues without running executables
+on every edit. Module configuration can extend it with executable checks when needed.
 
 ## Architecture
 
@@ -186,6 +204,34 @@ npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
 # Global installation
 npm install -g eslint prettier typescript
 ```
+
+After installation, set `allow_external_tools: true` in the tool or hook module
+configuration to run executable checks. Package configuration cannot grant this
+permission. File operands are canonicalized to the workspace, and paths beginning
+with `-` or escaping the workspace are rejected.
+
+The opt-in must be a boolean `true`, not a string or integer. Standard npm `.bin`
+symlinks to sibling packages inside the project's `node_modules` are supported;
+targets outside that installation tree are not selected as local tools. If no
+permitted local tool exists, `PATH` lookup remains the fallback. Opting in trusts
+executable code, plugins and project configuration; these checks are not a sandbox
+for ESLint, Prettier or TypeScript.
+
+Both mounted modules resolve relative operands and run subprocesses from the
+`session.working_dir` capability (falling back to process cwd at mount time). Their
+authorization boundary defaults to that directory, **not** an ancestor inferred from
+`package.json`. Module configuration can set an optional absolute `workspace_root`
+to use a containing workspace; the session working directory must be inside that
+root. Tool inputs and `package.json` cannot override either value. The Python API
+accepts separate `working_dir` and `workspace_root` keyword arguments with the same
+defaults.
+
+Package discovery cannot enlarge the authorization boundary. Without a wider
+module-configured root, parent package configuration and parent `node_modules` are
+not used. Built-in recursive scanning revalidates discovered files before reading:
+outside symlink targets produce `INVALID-PATH`, while in-root symlinks still work.
+This is canonical-path confinement, not protection against concurrent filesystem
+replacement between validation and opening.
 
 ## Context Files
 

@@ -121,6 +121,7 @@ class CheckConfig:
     enable_prettier: bool = True
     enable_tsc: bool = True
     enable_stub_check: bool = True
+    allow_external_tools: bool = False
 
     # Paths to exclude
     exclude_patterns: list[str] = field(
@@ -160,5 +161,6 @@ class CheckConfig:
             enable_prettier=data.get("enable_prettier", True),
             enable_tsc=data.get("enable_tsc", True),
             enable_stub_check=data.get("enable_stub_check", True),
+            allow_external_tools=data.get("allow_external_tools", False),
             exclude_patterns=data.get("exclude_patterns", cls().exclude_patterns),
         )
