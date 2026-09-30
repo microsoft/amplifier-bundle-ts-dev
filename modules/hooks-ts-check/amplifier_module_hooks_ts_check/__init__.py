@@ -5,6 +5,7 @@ checks, injecting feedback into the agent's context when issues are found.
 """
 
 import fnmatch
+import os
 from pathlib import Path
 from typing import Any
 
@@ -37,10 +38,19 @@ class TsCheckHooks:
         """
         config = config or {}
         self.working_dir = (working_dir or Path.cwd()).resolve()
-        self.workspace_root = Path(config.get("workspace_root", self.working_dir))
-        if not self.workspace_root.is_absolute():
-            raise ValueError("Host workspace_root must be absolute")
-        self.workspace_root = self.workspace_root.resolve()
+        self.workspace_root = self.working_dir
+        self.allow_external_tools = False
+        trusted_workspace_root = os.environ.get("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT")
+        if trusted_workspace_root:
+            candidate = Path(trusted_workspace_root)
+            if candidate.is_absolute():
+                try:
+                    candidate = candidate.resolve()
+                    if candidate.is_dir() and self.working_dir.is_relative_to(candidate):
+                        self.workspace_root = candidate
+                        self.allow_external_tools = True
+                except (OSError, RuntimeError):
+                    pass
         validate_paths([self.working_dir], self.workspace_root, self.working_dir)
         self.enabled = config.get("enabled", True)
         self.file_patterns = config.get(
@@ -56,7 +66,7 @@ class TsCheckHooks:
             enable_prettier="prettier" in self.checks,
             enable_tsc="tsc" in self.checks,
             enable_stub_check="stubs" in self.checks,
-            allow_external_tools=config.get("allow_external_tools") is True,
+            allow_external_tools=self.allow_external_tools,
         )
 
     def _matches_patterns(self, file_path: str) -> bool:
