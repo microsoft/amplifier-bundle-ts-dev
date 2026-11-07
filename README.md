@@ -44,6 +44,11 @@ This gives you:
 | **Types** | tsc | TypeScript type errors |
 | **Stubs** | custom | TODOs, console.log, 'any' types, placeholders |
 
+ESLint and Prettier report execution/configuration failures or unusable output as
+`CHECK-FAILED` errors. Prettier formatting differences remain warnings; a failed
+`--write` is an error. Failure feedback includes at most 1,000 characters of tool
+stderr so an agent can diagnose the problem without receiving the entire log.
+
 ## Agent Usage
 
 ### General TypeScript/JavaScript (`ts-dev`)
