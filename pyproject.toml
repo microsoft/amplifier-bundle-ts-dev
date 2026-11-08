@@ -1,6 +1,6 @@
 [project]
 name = "amplifier-bundle-ts-dev"
-version = "0.1.0"
+version = "0.1.1"
 description = "Comprehensive TypeScript/JavaScript development tools for Amplifier - code quality, LSP, and expert agent"
 readme = "README.md"
 license = { text = "MIT" }

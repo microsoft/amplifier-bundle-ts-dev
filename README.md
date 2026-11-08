@@ -27,13 +27,29 @@ Comprehensive TypeScript/JavaScript development tools for [Amplifier](https://gi
 ```yaml
 # In your bundle.yaml
 includes:
-  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.1
 ```
+
+The bundle and its two module sources use `v0.1.1`. Amplifier Core remains a
+host-provided peer. The external TypeScript LSP bundle still tracks its existing
+`main` source, so this is not a lock of all dependencies.
 
 This gives you:
 - TypeScript/JavaScript LSP (code intelligence)
 - TypeScript/JavaScript quality checks (tool + hook)
 - All four expert agents (ts-dev, react-dev, nextjs-dev, node-dev)
+
+### Stable releases
+
+`v0.1.1` reports ESLint and Prettier execution/configuration failures accurately
+and preserves formatting warnings. It keeps existing execution authorization
+and checking defaults.
+
+Releases are Git tags and GitHub source releases. Maintainers update the bundle,
+behavior, package and module metadata together, pin this repository's module
+sources to the release tag, and qualify the three built packages before tagging
+the reviewed main commit. No package-registry publication is implied. Use the
+GitHub release notes for the change summary and qualification limits.
 
 ## Checks Performed
 
