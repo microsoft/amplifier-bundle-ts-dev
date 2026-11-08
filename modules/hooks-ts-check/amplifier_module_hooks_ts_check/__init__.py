@@ -10,10 +10,9 @@ from typing import Any
 
 from amplifier_core import HookResult
 
-from ._core import CheckConfig
-from ._core import Severity
-from ._core import check_files
-from ._core import validate_paths
+from amplifier_bundle_ts_dev import CheckConfig
+from amplifier_bundle_ts_dev import check_files
+from amplifier_bundle_ts_dev.checker import validate_paths
 
 
 class TsCheckHooks:

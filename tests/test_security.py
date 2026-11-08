@@ -32,29 +32,6 @@ def load_module(name: str, path: Path, package: str | None = None) -> ModuleType
     return module
 
 
-@pytest.mark.parametrize(
-    "core_path",
-    [
-        ROOT / "modules/tool-ts-check/amplifier_module_tool_ts_check/_core.py",
-        ROOT / "modules/hooks-ts-check/amplifier_module_hooks_ts_check/_core.py",
-    ],
-)
-def test_all_checker_copies_disable_untrusted_external_tools(tmp_path: Path, core_path: Path) -> None:
-    core = load_module(f"security_core_{core_path.parent.parent.name}", core_path)
-    checker = core.TypeScriptChecker(core.CheckConfig(), working_dir=tmp_path)
-    local_bin = tmp_path / "node_modules" / ".bin"
-    local_bin.mkdir(parents=True)
-    (local_bin / "eslint").write_text("malicious")
-
-    with patch.object(core.subprocess, "run") as run:
-        result = checker.check_files([tmp_path])
-
-    run.assert_not_called()
-    assert {issue.code for issue in result.issues} == {"TOOL-EXECUTION-DISABLED"}
-    assert result.success is False
-    assert result.to_tool_output()["success"] is False
-
-
 def test_shared_checker_disables_untrusted_external_tools(tmp_path: Path) -> None:
     checker = TypeScriptChecker(CheckConfig(), working_dir=tmp_path)
     local_bin = tmp_path / "node_modules" / ".bin"
@@ -141,11 +118,6 @@ def test_tool_rejects_leading_dash_path_before_checking(tmp_path: Path, monkeypa
     package = ModuleType(package_name)
     package.__path__ = [str(ROOT / "modules/tool-ts-check" / package_name)]
     monkeypatch.setitem(sys.modules, package_name, package)
-    core = load_module(
-        f"{package_name}._core",
-        ROOT / "modules/tool-ts-check" / package_name / "_core.py",
-    )
-    monkeypatch.setitem(sys.modules, f"{package_name}._core", core)
     tool_module = load_module(
         f"{package_name}.__init__",
         ROOT / "modules/tool-ts-check" / package_name / "__init__.py",
@@ -175,11 +147,6 @@ def test_hook_rejects_leading_dash_path_before_checking(tmp_path: Path, monkeypa
     package = ModuleType(package_name)
     package.__path__ = [str(ROOT / "modules/hooks-ts-check" / package_name)]
     monkeypatch.setitem(sys.modules, package_name, package)
-    core = load_module(
-        f"{package_name}._core",
-        ROOT / "modules/hooks-ts-check" / package_name / "_core.py",
-    )
-    monkeypatch.setitem(sys.modules, f"{package_name}._core", core)
     hooks_module = load_module(
         f"{package_name}.__init__",
         ROOT / "modules/hooks-ts-check" / package_name / "__init__.py",
@@ -201,15 +168,9 @@ def test_hook_rejects_leading_dash_path_before_checking(tmp_path: Path, monkeypa
     assert result.user_message_level == "error"
 
 
-@pytest.fixture(params=["shared", "tool", "hooks"])
-def core(request):
-    if request.param == "shared":
-        return shared_core
-    name = request.param
-    return load_module(
-        f"boundary_core_{name}",
-        ROOT / f"modules/{name}-ts-check/amplifier_module_{name}_ts_check/_core.py",
-    )
+@pytest.fixture
+def core():
+    return shared_core
 
 
 @pytest.fixture
@@ -340,7 +301,7 @@ def test_package_metadata_cannot_expand_default_authorization(core, workspace):
         core.TypeScriptChecker(working_dir=workspace.parent, workspace_root=workspace)
 
 
-def test_project_config_cannot_grant_trust_in_any_copy(core, workspace):
+def test_project_config_cannot_grant_trust(core, workspace):
     (workspace / "package.json").write_text('{"amplifier-ts-dev":{"allow_external_tools":true}}')
     assert core.TypeScriptChecker(working_dir=workspace).config.allow_external_tools is False
 
@@ -365,6 +326,16 @@ def adapter(request, monkeypatch):
         package=f"boundary_adapter_{name}",
     )
     return name, module
+
+
+def test_adapters_use_the_shared_checker(adapter):
+    _, module = adapter
+    assert module.check_files is shared_core.check_files
+    assert module.validate_paths is shared_core.validate_paths
+    if adapter[0] == "tool":
+        assert module.check_content is shared_core.check_content
+    else:
+        assert module.CheckConfig is CheckConfig
 
 
 def mounted_handler(adapter, working_dir, config):
@@ -427,10 +398,9 @@ def test_mounted_adapters_keep_authorized_execution_cwd_and_operand(adapter, wor
         child,
         {"workspace_root": str(workspace), "allow_external_tools": True, "checks": ["eslint", "prettier"]},
     )
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
     with (
-        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/tool"),
-        patch.object(core_module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="[]")) as run,
+        patch.object(shared_core.TypeScriptChecker, "_find_executable", return_value="/host/bin/tool"),
+        patch.object(shared_core.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="[]")) as run,
     ):
         invoke_handler(adapter, handler, "file.ts", fix=True, checks=["eslint", "prettier"])
     assert run.call_count == 2
@@ -450,9 +420,8 @@ def test_environment_cannot_authorize_missing_or_false_module_config(adapter, wo
     monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", str(workspace))
     config = {**module_config, "checks": ["eslint"]}
     handler = mounted_handler(adapter, workspace, config)
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = invoke_handler(adapter, handler, "file.ts", checks=["eslint"])
 
     run.assert_not_called()
@@ -464,11 +433,10 @@ def test_environment_cannot_override_true_module_config(adapter, workspace, monk
     source.write_text("const value = 1;\n")
     monkeypatch.setenv("AMPLIFIER_TS_DEV_TRUSTED_WORKSPACE_ROOT", "poison")
     handler = mounted_handler(adapter, workspace, {"allow_external_tools": True, "checks": ["eslint"]})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
     with (
-        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/eslint"),
-        patch.object(core_module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="[]")) as run,
+        patch.object(shared_core.TypeScriptChecker, "_find_executable", return_value="/host/bin/eslint"),
+        patch.object(shared_core.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="[]")) as run,
     ):
         invoke_handler(adapter, handler, "file.ts", checks=["eslint"])
 
@@ -494,9 +462,8 @@ def test_behavior_default_hook_runs_only_stubs(adapter, workspace):
 """
     assert expected_hook_checks in behavior
     handler = mounted_handler(adapter, workspace, {"checks": ["stubs"]})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = invoke_handler(adapter, handler, "file.ts")
 
     run.assert_not_called()
@@ -510,9 +477,8 @@ def test_bare_hook_constructor_runs_only_stubs(adapter, workspace):
     source = workspace / "file.ts"
     source.write_text("// TODO: BARE_HOOK_MARKER\n")
     hooks = adapter[1].TsCheckHooks(working_dir=workspace)
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = asyncio.run(
             hooks.handle_tool_post("tool:post", {"tool_name": "write_file", "tool_input": {"path": "file.ts"}})
         )
@@ -531,12 +497,11 @@ def test_trusted_hook_explicit_eslint_check_can_execute(adapter, workspace):
         {"allow_external_tools": True, "checks": ["eslint"]},
         working_dir=workspace,
     )
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
     with (
-        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value="/host/bin/eslint"),
+        patch.object(shared_core.TypeScriptChecker, "_find_executable", return_value="/host/bin/eslint"),
         patch.object(
-            core_module.subprocess,
+            shared_core.subprocess,
             "run",
             return_value=SimpleNamespace(returncode=0, stdout="[]"),
         ) as run,
@@ -554,9 +519,8 @@ def test_tool_preserves_project_stub_disable_without_project_trust(adapter, work
         '{"amplifier-ts-dev":{"enable_stub_check":false,"allow_external_tools":true}}'
     )
     handler = mounted_handler(adapter, workspace, {})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = asyncio.run(handler({"paths": ["file.ts"]}))
 
     run.assert_not_called()
@@ -571,9 +535,8 @@ def test_tool_empty_check_list_preserves_default_checks(adapter, workspace):
     source = workspace / "file.ts"
     source.write_text("// TODO: EMPTY_CHECKS_MARKER\n")
     handler = mounted_handler(adapter, workspace, {})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = asyncio.run(handler({"paths": ["file.ts"], "checks": []}))
 
     run.assert_not_called()
@@ -590,9 +553,8 @@ def test_tool_explicit_stubs_override_project_stub_disable(adapter, workspace):
     source.write_text("// TODO: EXPLICIT_STUB_MARKER\n")
     (workspace / "package.json").write_text('{"amplifier-ts-dev":{"enable_stub_check":false}}')
     handler = mounted_handler(adapter, workspace, {})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = asyncio.run(handler({"paths": ["file.ts"], "checks": ["stubs"]}))
 
     run.assert_not_called()
@@ -605,9 +567,8 @@ def test_tool_preserves_project_exclude_patterns(adapter, workspace):
     source.write_text("// TODO: EXCLUDED_BY_PROJECT_CONFIG\n")
     (workspace / "package.json").write_text('{"amplifier-ts-dev":{"exclude_patterns":["excluded"]}}')
     handler = mounted_handler(adapter, workspace, {})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = asyncio.run(handler({"paths": ["."]}))
 
     run.assert_not_called()
@@ -622,9 +583,8 @@ def test_tool_does_not_load_parent_package_outside_workspace(adapter, workspace)
     source.write_text("// TODO: OUTSIDE_PARENT_CONFIG_MARKER\n")
     (workspace / "package.json").write_text('{"amplifier-ts-dev":{"enable_stub_check":false}}')
     handler = mounted_handler(adapter, child, {})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
 
-    with patch.object(core_module.subprocess, "run") as run:
+    with patch.object(shared_core.subprocess, "run") as run:
         result = asyncio.run(handler({"paths": ["file.ts"]}))
 
     run.assert_not_called()
@@ -737,9 +697,7 @@ def test_mounted_tool_default_directory_and_content(adapter, workspace, monkeypa
         pytest.param("tsc", 0, "warning TS9999: Advisory.\n", "", False, "TS9999", True, id="tsc-warning-advisory"),
     ],
 )
-def test_checker_outcomes_are_honest_in_every_delivery(
-    core, workspace, tool, exit_code, stdout, stderr, fix, expected_code, success
-):
+def test_checker_outcomes_are_honest(core, workspace, tool, exit_code, stdout, stderr, fix, expected_code, success):
     (workspace / "file.ts").write_text("const value = 1;\n")
     checker = core.TypeScriptChecker(working_dir=workspace)
     process = SimpleNamespace(returncode=exit_code, stdout=stdout, stderr=stderr)
@@ -773,11 +731,10 @@ def test_checker_outcomes_are_honest_in_every_delivery(
 def test_mounted_checker_failure_reports_advisory_feedback(adapter, workspace, tool):
     (workspace / "file.ts").write_text("const value = 1;\n")
     handler = mounted_handler(adapter, workspace, {"allow_external_tools": True, "checks": [tool]})
-    core_module = sys.modules[f"{adapter[1].__name__}._core"]
     process = SimpleNamespace(returncode=2, stdout="", stderr="CONFIG_DETAIL " + "x" * 2000 + " OMITTED_TAIL")
     with (
-        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value=f"/host/bin/{tool}"),
-        patch.object(core_module.subprocess, "run", return_value=process),
+        patch.object(shared_core.TypeScriptChecker, "_find_executable", return_value=f"/host/bin/{tool}"),
+        patch.object(shared_core.subprocess, "run", return_value=process),
     ):
         result = invoke_handler(adapter, handler, "file.ts", checks=[tool])
 

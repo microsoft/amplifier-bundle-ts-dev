@@ -55,6 +55,18 @@ sources to the release tag, and qualify the three built packages before tagging
 the reviewed main commit. No package-registry publication is implied. Use the
 GitHub release notes for the change summary and qualification limits.
 
+## Shared checker installation
+
+The tool and hook modules import this repository's `amplifier_bundle_ts_dev`
+library. Each module declares the released library as an ordinary dependency,
+so installing either module also installs its checker. Amplifier Core remains a
+host-provided peer. No sibling checkout or manual `PYTHONPATH` setup is required.
+
+The dependency currently pins `v0.1.2`, whose checker includes the compiler-failure
+fixes described above. Maintainers must update and qualify this pin whenever the
+shared checker changes; a root library change alone does not update already
+released modules. Keep Core outside module dependency resolution.
+
 ## Checks Performed
 
 | Check | Tool | What It Catches |

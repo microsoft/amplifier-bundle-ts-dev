@@ -9,10 +9,11 @@ from typing import Any
 
 from amplifier_core import ToolResult
 
-from . import _core
-from ._core import check_content
-from ._core import check_files
-from ._core import validate_paths
+from amplifier_bundle_ts_dev import check_content
+from amplifier_bundle_ts_dev import check_files
+from amplifier_bundle_ts_dev.checker import validate_paths
+from amplifier_bundle_ts_dev.config import find_project_root
+from amplifier_bundle_ts_dev.config import load_config
 
 
 class TsCheckTool:
@@ -97,10 +98,10 @@ Returns:
         fix = input_data.get("fix", False)
         checks = input_data.get("checks")
 
-        project_root = _core.find_project_root(self.working_dir)
+        project_root = find_project_root(self.working_dir)
         if project_root is None or not project_root.is_relative_to(self.workspace_root):
             project_root = self.working_dir
-        config = _core.load_config(project_root=project_root)
+        config = load_config(project_root=project_root)
         config.allow_external_tools = self.module_config.get("allow_external_tools") is True
         if checks:
             config.enable_eslint = "eslint" in checks
