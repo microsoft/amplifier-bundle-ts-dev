@@ -65,6 +65,11 @@ ESLint and Prettier report execution/configuration failures or unusable output a
 `--write` is an error. Failure feedback includes at most 1,000 characters of tool
 stderr so an agent can diagnose the problem without receiving the entire log.
 
+TypeScript compiler diagnostics preserve both source locations and global/configuration
+errors from stdout or stderr. A failed compiler invocation or nonzero exit without
+an error diagnostic is reported as `CHECK-FAILED`, never as a clean check. Ordinary
+compiler warnings remain advisory.
+
 ## Agent Usage
 
 ### General TypeScript/JavaScript (`ts-dev`)

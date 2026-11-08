@@ -717,18 +717,38 @@ def test_mounted_tool_default_directory_and_content(adapter, workspace, monkeypa
         ),
         pytest.param("prettier", 0, "", "", False, None, True, id="prettier-clean"),
         pytest.param("prettier", 0, "file.ts 1ms", "", True, None, True, id="prettier-fix-complete"),
+        pytest.param("tsc", 1, "error TS18003: No inputs were found.\n", "", False, "TS18003", False, id="tsc-global"),
+        pytest.param("tsc", 1, "", "error TS5023: Unknown compiler option.\n", False, "TS5023", False, id="tsc-stderr"),
+        pytest.param("tsc", 1, "", "Compiler failed", False, "CHECK-FAILED", False, id="tsc-process-failed"),
+        pytest.param("tsc", -9, "", "", False, "CHECK-FAILED", False, id="tsc-terminated"),
+        pytest.param("tsc", 2, "Unrecognized failure", "", False, "CHECK-FAILED", False, id="tsc-unparsed"),
+        pytest.param("tsc", 0, "", "", False, None, True, id="tsc-clean"),
+        pytest.param("tsc", 0, "Compilation statistics\n", "", False, None, True, id="tsc-success-output"),
+        pytest.param(
+            "tsc",
+            2,
+            "C:\\project\\file.ts(2,3): error TS2322: Type mismatch.\n",
+            "",
+            False,
+            "TS2322",
+            False,
+            id="tsc-located-error",
+        ),
+        pytest.param("tsc", 0, "warning TS9999: Advisory.\n", "", False, "TS9999", True, id="tsc-warning-advisory"),
     ],
 )
 def test_checker_outcomes_are_honest_in_every_delivery(
     core, workspace, tool, exit_code, stdout, stderr, fix, expected_code, success
 ):
+    (workspace / "file.ts").write_text("const value = 1;\n")
     checker = core.TypeScriptChecker(working_dir=workspace)
     process = SimpleNamespace(returncode=exit_code, stdout=stdout, stderr=stderr)
     with (
         patch.object(checker, "_find_executable", return_value=f"/host/bin/{tool}"),
         patch.object(core.subprocess, "run", return_value=process),
     ):
-        result = getattr(checker, f"_run_{tool}")([str(workspace / "file.ts")], fix=fix)
+        options = {} if tool == "tsc" else {"fix": fix}
+        result = getattr(checker, f"_run_{tool}")([str(workspace / "file.ts")], **options)
 
     output = result.to_tool_output()
     assert output["success"] is success
@@ -737,12 +757,19 @@ def test_checker_outcomes_are_honest_in_every_delivery(
     assert [issue["code"] for issue in output["issues"]] == ([expected_code] if expected_code else [])
     if expected_code == "FORMAT":
         assert output["issues"][0]["file"] == "file.ts"
+    if expected_code == "TS2322":
+        assert output["issues"][0]["file"] == "C:\\project\\file.ts"
+        assert output["issues"][0]["line"] == 2
+        assert output["issues"][0]["column"] == 3
+    if expected_code in {"TS18003", "TS5023", "TS9999"}:
+        assert output["issues"][0]["file"] == ""
+        assert output["issues"][0]["line"] == 0
     if expected_code == "CHECK-FAILED":
         assert "All checks passed" not in output["summary"]
         assert output["issues"][0]["source"] == tool
 
 
-@pytest.mark.parametrize("tool", ["eslint", "prettier"])
+@pytest.mark.parametrize("tool", ["eslint", "prettier", "tsc"])
 def test_mounted_checker_failure_reports_advisory_feedback(adapter, workspace, tool):
     (workspace / "file.ts").write_text("const value = 1;\n")
     handler = mounted_handler(adapter, workspace, {"allow_external_tools": True, "checks": [tool]})
@@ -765,3 +792,37 @@ def test_mounted_checker_failure_reports_advisory_feedback(adapter, workspace, t
     else:
         assert result.action == "inject_context"
         assert result.user_message_level == "error"
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        FileNotFoundError("Compiler disappeared"),
+        PermissionError("Access denied"),
+        UnicodeError("Unreadable compiler output"),
+    ],
+)
+def test_tsc_invocation_errors_are_reported(core, workspace, failure):
+    (workspace / "file.ts").write_text("const value = 1;\n")
+    checker = core.TypeScriptChecker(working_dir=workspace)
+    with (
+        patch.object(checker, "_find_executable", return_value="/host/bin/tsc"),
+        patch.object(core.subprocess, "run", side_effect=failure),
+    ):
+        result = checker._run_tsc([str(workspace / "file.ts")])
+    assert result.success is False
+    assert result.issues[0].code == "CHECK-FAILED"
+    assert str(failure) in result.issues[0].message
+
+
+def test_tsc_nonzero_exit_cannot_be_explained_by_a_warning(core, workspace):
+    (workspace / "file.ts").write_text("const value = 1;\n")
+    checker = core.TypeScriptChecker(working_dir=workspace)
+    process = SimpleNamespace(returncode=2, stdout="warning TS9999: Advisory.\n", stderr="Compiler failed")
+    with (
+        patch.object(checker, "_find_executable", return_value="/host/bin/tsc"),
+        patch.object(core.subprocess, "run", return_value=process),
+    ):
+        result = checker._run_tsc([str(workspace / "file.ts")])
+    assert result.success is False
+    assert [issue.code for issue in result.issues] == ["TS9999", "CHECK-FAILED"]
