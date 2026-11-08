@@ -11,11 +11,11 @@
 #
 # Usage:
 #   includes:
-#     - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@main
+#     - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.1
 
 bundle:
   name: ts-dev
-  version: 0.1.0
+  version: 0.1.1
   description: Comprehensive TypeScript/JavaScript development tools with code quality, LSP, and expert agent
 
 # Behavior bundle pattern - provides capabilities to be composed into other bundles
