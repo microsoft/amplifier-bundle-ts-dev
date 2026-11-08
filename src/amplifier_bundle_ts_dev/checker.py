@@ -190,6 +190,26 @@ class TypeScriptChecker:
             checks_run=[name],
         )
 
+    def _check_failed(self, name: str, message: str, detail: str = "") -> CheckResult:
+        """Report a checker failure without flooding tool or hook output."""
+        detail = detail.strip()
+        if detail:
+            message += " " + detail[:1000] + ("..." if len(detail) > 1000 else "")
+        return CheckResult(
+            issues=[
+                Issue(
+                    file="",
+                    line=0,
+                    column=0,
+                    code="CHECK-FAILED",
+                    message=message,
+                    severity=Severity.ERROR,
+                    source=name,
+                )
+            ],
+            checks_run=[name],
+        )
+
     def _run_eslint(self, paths: list[str], fix: bool = False) -> CheckResult:
         """Run ESLint check."""
         eslint = self._find_executable("eslint")
@@ -242,35 +262,45 @@ class TypeScriptChecker:
                 checks_run=["eslint"],
             )
 
-        issues = []
-        if result.stdout.strip():
-            try:
-                eslint_output = json.loads(result.stdout)
-                for file_result in eslint_output:
-                    file_path = file_result.get("filePath", "")
-                    for msg in file_result.get("messages", []):
-                        severity_map = {
-                            2: Severity.ERROR,
-                            1: Severity.WARNING,
-                        }
-                        severity = severity_map.get(msg.get("severity", 1), Severity.WARNING)
+        if result.returncode not in (0, 1):
+            return self._check_failed("eslint", f"ESLint failed (exit {result.returncode}).", result.stderr)
 
-                        issues.append(
-                            Issue(
-                                file=file_path,
-                                line=msg.get("line", 0),
-                                column=msg.get("column", 0),
-                                code=msg.get("ruleId") or "eslint",
-                                message=msg.get("message", ""),
-                                severity=severity,
-                                source="eslint",
-                                suggestion=msg.get("fix", {}).get("text") if msg.get("fix") else None,
-                                end_line=msg.get("endLine"),
-                                end_column=msg.get("endColumn"),
-                            )
+        issues = []
+        try:
+            eslint_output = json.loads(result.stdout)
+            if not isinstance(eslint_output, list):
+                raise ValueError("Expected a JSON array")
+            for file_result in eslint_output:
+                file_path = file_result.get("filePath", "")
+                messages = file_result["messages"]
+                if not isinstance(messages, list):
+                    raise ValueError("Expected a diagnostic array")
+                for msg in messages:
+                    severity_map = {
+                        2: Severity.ERROR,
+                        1: Severity.WARNING,
+                    }
+                    severity = severity_map.get(msg.get("severity", 1), Severity.WARNING)
+
+                    issues.append(
+                        Issue(
+                            file=file_path,
+                            line=msg.get("line", 0),
+                            column=msg.get("column", 0),
+                            code=msg.get("ruleId") or "eslint",
+                            message=msg.get("message", ""),
+                            severity=severity,
+                            source="eslint",
+                            suggestion=msg.get("fix", {}).get("text") if msg.get("fix") else None,
+                            end_line=msg.get("endLine"),
+                            end_column=msg.get("endColumn"),
                         )
-            except json.JSONDecodeError:
-                pass
+                    )
+        except (ValueError, TypeError, AttributeError, KeyError):
+            return self._check_failed("eslint", "ESLint did not return a valid JSON report.", result.stderr)
+
+        if result.returncode == 1 and not issues:
+            return self._check_failed("eslint", "ESLint failed without reporting a diagnostic.", result.stderr)
 
         return CheckResult(issues=issues, checks_run=["eslint"])
 
@@ -319,12 +349,16 @@ class TypeScriptChecker:
                 checks_run=["prettier"],
             )
 
+        if result.returncode not in (0, 1) or (fix and result.returncode != 0):
+            return self._check_failed("prettier", f"Prettier failed (exit {result.returncode}).", result.stderr)
+
         issues = []
-        if result.returncode != 0 and not fix:
-            # Parse stderr for files that would be reformatted
-            # Prettier outputs: "Checking formatting...\n[warn] file.ts\n..."
-            for line in result.stdout.split("\n"):
+        if result.returncode == 1:
+            # Prettier v3 writes warnings to stderr; older versions used stdout.
+            for line in (result.stdout + "\n" + result.stderr).splitlines():
                 line = line.strip()
+                if line.startswith("[warn] Code style"):
+                    continue
                 if line.startswith("[warn]"):
                     file_path = line[6:].strip()
                     issues.append(
@@ -353,6 +387,11 @@ class TypeScriptChecker:
                             suggestion="Run with --fix to auto-format",
                         )
                     )
+
+            if not issues:
+                return self._check_failed(
+                    "prettier", "Prettier failed without reporting unformatted files.", result.stderr
+                )
 
         return CheckResult(issues=issues, checks_run=["prettier"])
 

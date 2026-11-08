@@ -655,3 +655,113 @@ def test_mounted_tool_default_directory_and_content(adapter, workspace, monkeypa
     result = asyncio.run(handler({"content": "// TODO: CONTENT_MARKER\n"}))
     assert "CONTENT_MARKER" in str(result.output)
     assert sorted(path.name for path in child.iterdir()) == ["file.ts"]
+
+
+@pytest.mark.parametrize(
+    "tool,exit_code,stdout,stderr,fix,expected_code,success",
+    [
+        pytest.param("eslint", 2, "", "Invalid configuration", False, "CHECK-FAILED", False, id="eslint-config"),
+        pytest.param("eslint", -9, "", "", False, "CHECK-FAILED", False, id="eslint-terminated"),
+        pytest.param("eslint", 0, "not json", "", False, "CHECK-FAILED", False, id="eslint-invalid-json"),
+        pytest.param("eslint", 0, "{}", "", False, "CHECK-FAILED", False, id="eslint-invalid-shape"),
+        pytest.param("eslint", 0, '[{"messages":{}}]', "", False, "CHECK-FAILED", False, id="eslint-invalid-messages"),
+        pytest.param("eslint", 0, "[{}]", "", False, "CHECK-FAILED", False, id="eslint-missing-messages"),
+        pytest.param("eslint", 0, "", "", False, "CHECK-FAILED", False, id="eslint-empty-output"),
+        pytest.param("eslint", 1, "[]", "", False, "CHECK-FAILED", False, id="eslint-missing-diagnostic"),
+        pytest.param("eslint", 0, "[]", "", False, None, True, id="eslint-clean"),
+        pytest.param(
+            "eslint",
+            1,
+            '[{"filePath":"file.ts","messages":[{"severity":2,"ruleId":"no-undef","message":"Unknown name"}]}]',
+            "",
+            False,
+            "no-undef",
+            False,
+            id="eslint-lint-error",
+        ),
+        pytest.param(
+            "eslint",
+            0,
+            '[{"filePath":"file.ts","messages":[{"severity":1,"ruleId":"no-console","message":"Console call"}]}]',
+            "",
+            False,
+            "no-console",
+            True,
+            id="eslint-warning-remains-advisory",
+        ),
+        pytest.param(
+            "prettier",
+            1,
+            "Checking formatting...\n",
+            "[warn] file.ts\n[warn] Code style issues found in 1 file.\n",
+            False,
+            "FORMAT",
+            True,
+            id="prettier-stderr-warning",
+        ),
+        pytest.param("prettier", 1, "[warn] file.ts\n", "", False, "FORMAT", True, id="prettier-stdout-warning"),
+        pytest.param("prettier", 2, "", "Invalid configuration", False, "CHECK-FAILED", False, id="prettier-config"),
+        pytest.param(
+            "prettier", 2, "", "Invalid configuration", True, "CHECK-FAILED", False, id="prettier-fix-failure"
+        ),
+        pytest.param("prettier", 1, "", "[warn] file.ts\n", True, "CHECK-FAILED", False, id="prettier-fix-incomplete"),
+        pytest.param(
+            "prettier",
+            1,
+            "",
+            "[warn] Code style issues found.\n",
+            False,
+            "CHECK-FAILED",
+            False,
+            id="prettier-missing-files",
+        ),
+        pytest.param("prettier", 0, "", "", False, None, True, id="prettier-clean"),
+        pytest.param("prettier", 0, "file.ts 1ms", "", True, None, True, id="prettier-fix-complete"),
+    ],
+)
+def test_checker_outcomes_are_honest_in_every_delivery(
+    core, workspace, tool, exit_code, stdout, stderr, fix, expected_code, success
+):
+    checker = core.TypeScriptChecker(working_dir=workspace)
+    process = SimpleNamespace(returncode=exit_code, stdout=stdout, stderr=stderr)
+    with (
+        patch.object(checker, "_find_executable", return_value=f"/host/bin/{tool}"),
+        patch.object(core.subprocess, "run", return_value=process),
+    ):
+        result = getattr(checker, f"_run_{tool}")([str(workspace / "file.ts")], fix=fix)
+
+    output = result.to_tool_output()
+    assert output["success"] is success
+    assert output["clean"] is (expected_code is None)
+    assert output["checks_run"] == [tool]
+    assert [issue["code"] for issue in output["issues"]] == ([expected_code] if expected_code else [])
+    if expected_code == "FORMAT":
+        assert output["issues"][0]["file"] == "file.ts"
+    if expected_code == "CHECK-FAILED":
+        assert "All checks passed" not in output["summary"]
+        assert output["issues"][0]["source"] == tool
+
+
+@pytest.mark.parametrize("tool", ["eslint", "prettier"])
+def test_mounted_checker_failure_reports_advisory_feedback(adapter, workspace, tool):
+    (workspace / "file.ts").write_text("const value = 1;\n")
+    handler = mounted_handler(adapter, workspace, {"allow_external_tools": True, "checks": [tool]})
+    core_module = sys.modules[f"{adapter[1].__name__}._core"]
+    process = SimpleNamespace(returncode=2, stdout="", stderr="CONFIG_DETAIL " + "x" * 2000 + " OMITTED_TAIL")
+    with (
+        patch.object(core_module.TypeScriptChecker, "_find_executable", return_value=f"/host/bin/{tool}"),
+        patch.object(core_module.subprocess, "run", return_value=process),
+    ):
+        result = invoke_handler(adapter, handler, "file.ts", checks=[tool])
+
+    output = str(vars(result))
+    assert "CHECK-FAILED" in output
+    assert "CONFIG_DETAIL" in output
+    assert "OMITTED_TAIL" not in output
+    if adapter[0] == "tool":
+        assert result.success is False
+        assert result.output["clean"] is False
+        assert len(result.output["issues"][0]["message"]) < 1100
+    else:
+        assert result.action == "inject_context"
+        assert result.user_message_level == "error"
