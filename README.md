@@ -27,10 +27,10 @@ Comprehensive TypeScript/JavaScript development tools for [Amplifier](https://gi
 ```yaml
 # In your bundle.yaml
 includes:
-  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.2
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.3
 ```
 
-The bundle and its two module sources use `v0.1.2`. Amplifier Core remains a
+The bundle and its two module sources use `v0.1.3`. Amplifier Core remains a
 host-provided peer. The external TypeScript LSP bundle still tracks its existing
 `main` source, so this is not a lock of all dependencies.
 
@@ -41,6 +41,10 @@ This gives you:
 
 ### Stable releases
 
+`v0.1.3` makes the tool and hook import one shared checker library instead of
+maintaining private copies. Module installation brings in the released library;
+checking behavior and execution authorization are unchanged.
+
 `v0.1.2` preserves TypeScript compiler diagnostics without source locations and
 reports failed compiler invocations or unexplained nonzero exits as errors.
 Checking defaults and execution authorization remain unchanged.
@@ -49,10 +53,11 @@ Checking defaults and execution authorization remain unchanged.
 and preserves formatting warnings. It keeps existing execution authorization
 and checking defaults.
 
-Releases are Git tags and GitHub source releases. Maintainers update the bundle,
-behavior, package and module metadata together, pin this repository's module
-sources to the release tag, and qualify the three built packages before tagging
-the reviewed main commit. No package-registry publication is implied. Use the
+Releases are Git tags and GitHub source releases. The bundle, behavior, and modules
+advance together and pin their module sources to the release tag. The unchanged
+shared library retains its own `0.1.2` version and dependency pin. Maintainers
+qualify the built packages and dependency resolution before tagging the reviewed
+main commit. No package-registry publication is implied. Use the
 GitHub release notes for the change summary and qualification limits.
 
 ## Shared checker installation
