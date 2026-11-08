@@ -27,10 +27,10 @@ Comprehensive TypeScript/JavaScript development tools for [Amplifier](https://gi
 ```yaml
 # In your bundle.yaml
 includes:
-  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.1
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.2
 ```
 
-The bundle and its two module sources use `v0.1.1`. Amplifier Core remains a
+The bundle and its two module sources use `v0.1.2`. Amplifier Core remains a
 host-provided peer. The external TypeScript LSP bundle still tracks its existing
 `main` source, so this is not a lock of all dependencies.
 
@@ -40,6 +40,10 @@ This gives you:
 - All four expert agents (ts-dev, react-dev, nextjs-dev, node-dev)
 
 ### Stable releases
+
+`v0.1.2` preserves TypeScript compiler diagnostics without source locations and
+reports failed compiler invocations or unexplained nonzero exits as errors.
+Checking defaults and execution authorization remain unchanged.
 
 `v0.1.1` reports ESLint and Prettier execution/configuration failures accurately
 and preserves formatting warnings. It keeps existing execution authorization
@@ -64,6 +68,11 @@ ESLint and Prettier report execution/configuration failures or unusable output a
 `CHECK-FAILED` errors. Prettier formatting differences remain warnings; a failed
 `--write` is an error. Failure feedback includes at most 1,000 characters of tool
 stderr so an agent can diagnose the problem without receiving the entire log.
+
+TypeScript compiler diagnostics preserve both source locations and global/configuration
+errors from stdout or stderr. A failed compiler invocation or nonzero exit without
+an error diagnostic is reported as `CHECK-FAILED`, never as a clean check. Ordinary
+compiler warnings remain advisory.
 
 ## Agent Usage
 

@@ -1,6 +1,6 @@
 [project]
 name = "amplifier-module-hooks-ts-check"
-version = "0.1.1"
+version = "0.1.2"
 description = "Auto-checking hook for TypeScript/JavaScript files in Amplifier"
 requires-python = ">=3.11"
 license = { text = "MIT" }

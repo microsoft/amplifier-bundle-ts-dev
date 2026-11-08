@@ -436,27 +436,14 @@ class TypeScriptChecker:
                 ],
                 checks_run=["tsc"],
             )
-        except FileNotFoundError:
-            return CheckResult(
-                issues=[
-                    Issue(
-                        file="",
-                        line=0,
-                        column=0,
-                        code="TOOL-NOT-FOUND",
-                        message="tsc not found. Install with: npm install -D typescript",
-                        severity=Severity.WARNING,
-                        source="tsc",
-                    )
-                ],
-                checks_run=["tsc"],
-            )
+        except (OSError, UnicodeError) as exc:
+            return self._check_failed("tsc", "TypeScript compiler could not run.", str(exc))
 
         issues = []
-        # Parse tsc output: file(line,col): error TSxxxx: message
-        tsc_pattern = re.compile(r"(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.+)")
+        # Configuration/compiler diagnostics may have no source location.
+        tsc_pattern = re.compile(r"(?:(.+?)\((\d+),(\d+)\):\s+)?(error|warning)\s+(TS\d+):\s+(.+)")
 
-        for line in result.stdout.split("\n"):
+        for line in (result.stdout + "\n" + result.stderr).splitlines():
             match = tsc_pattern.match(line.strip())
             if match:
                 file_path, line_num, col, severity_str, code, message = match.groups()
@@ -464,9 +451,9 @@ class TypeScriptChecker:
 
                 issues.append(
                     Issue(
-                        file=file_path,
-                        line=int(line_num),
-                        column=int(col),
+                        file=file_path or "",
+                        line=int(line_num or 0),
+                        column=int(col or 0),
                         code=code,
                         message=message,
                         severity=severity,
@@ -474,7 +461,14 @@ class TypeScriptChecker:
                     )
                 )
 
-        return CheckResult(issues=issues, checks_run=["tsc"])
+        parsed = CheckResult(issues=issues, checks_run=["tsc"])
+        if result.returncode != 0 and parsed.success:
+            return parsed.merge(
+                self._check_failed(
+                    "tsc", f"TypeScript compiler failed (exit {result.returncode}).", result.stderr or result.stdout
+                )
+            )
+        return parsed
 
     def _run_stub_check(self, paths: list[str]) -> CheckResult:
         """Check for TODOs, stubs, and placeholder code."""
