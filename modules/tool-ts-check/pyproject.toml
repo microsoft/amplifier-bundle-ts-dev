@@ -1,6 +1,6 @@
 [project]
 name = "amplifier-module-tool-ts-check"
-version = "0.1.1"
+version = "0.1.2"
 description = "TypeScript/JavaScript code quality checking tool for Amplifier"
 requires-python = ">=3.11"
 license = { text = "MIT" }

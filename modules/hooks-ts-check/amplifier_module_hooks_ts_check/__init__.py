@@ -183,7 +183,7 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
 
     return {
         "name": "hooks-ts-check",
-        "version": "0.1.1",
+        "version": "0.1.2",
         "provides": ["ts_check_hook"],
         "config": {
             "enabled": hooks.enabled,
