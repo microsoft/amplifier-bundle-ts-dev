@@ -9,13 +9,13 @@
 
 bundle:
   name: ts-dev-behavior
-  version: 0.1.3
+  version: 0.1.4
   description: TypeScript/JavaScript development tools - quality checks, auto-checking hook, and framework-specific agents
 
 # Tools provided by this behavior
 tools:
   - module: tool-ts-check
-    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.3#subdirectory=modules/tool-ts-check
+    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.4#subdirectory=modules/tool-ts-check
     config:
       # Default configuration - can be overridden in package.json
       default_checks:
@@ -27,7 +27,7 @@ tools:
 # Hooks provided by this behavior
 hooks:
   - module: hooks-ts-check
-    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.3#subdirectory=modules/hooks-ts-check
+    source: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.4#subdirectory=modules/hooks-ts-check
     config:
       # Enable automatic checking on TypeScript/JavaScript file edits
       enabled: true

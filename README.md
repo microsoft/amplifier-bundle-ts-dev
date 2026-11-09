@@ -27,10 +27,10 @@ Comprehensive TypeScript/JavaScript development tools for [Amplifier](https://gi
 ```yaml
 # In your bundle.yaml
 includes:
-  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.3
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-ts-dev@v0.1.4
 ```
 
-The bundle and its two module sources use `v0.1.3`. Amplifier Core remains a
+The bundle and its two module sources use `v0.1.4`. Amplifier Core remains a
 host-provided peer. The external TypeScript LSP bundle still tracks its existing
 `main` source, so this is not a lock of all dependencies.
 
@@ -40,6 +40,10 @@ This gives you:
 - All four expert agents (ts-dev, react-dev, nextjs-dev, node-dev)
 
 ### Stable releases
+
+`v0.1.4` checks the confirmed output path after successful edits and skips
+explicitly failed writes. Shared checker behavior and execution authorization
+are unchanged.
 
 `v0.1.3` makes the tool and hook import one shared checker library instead of
 maintaining private copies. Module installation brings in the released library;
