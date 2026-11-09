@@ -88,7 +88,7 @@ class TsCheckHooks:
 
         Args:
             event: Event name (e.g., "tool:post")
-            data: Event data with tool_name, tool_input, tool_result
+            data: Event data with tool_name, tool_input, result (or legacy tool_result)
 
         Returns:
             HookResult with action and optional context injection
@@ -103,9 +103,24 @@ class TsCheckHooks:
         if tool_name not in write_tools:
             return HookResult(action="continue")
 
-        # Extract file path from tool input
-        tool_input = data.get("tool_input", {})
-        file_path = tool_input.get("file_path", tool_input.get("path", ""))
+        tool_result = data.get("result", data.get("tool_result"))
+        succeeded = (
+            tool_result.get("success") if isinstance(tool_result, dict) else getattr(tool_result, "success", None)
+        )
+        if succeeded is False:
+            return HookResult(action="continue")
+
+        tool_output = (
+            tool_result.get("output") if isinstance(tool_result, dict) else getattr(tool_result, "output", None)
+        )
+        resolved_path = tool_output.get("file_path") if isinstance(tool_output, dict) else None
+        # Successful filesystem receipts already resolve mentions and working directories.
+        # Legacy events without that receipt retain their input-path behavior.
+        if succeeded is True and isinstance(resolved_path, str) and resolved_path:
+            file_path = resolved_path
+        else:
+            tool_input = data.get("tool_input", {})
+            file_path = tool_input.get("file_path", tool_input.get("path", ""))
 
         if not file_path:
             return HookResult(action="continue")
